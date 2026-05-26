@@ -118,6 +118,7 @@ export const NAV_TREE: TreeSection[] = [
           leaf('worldview-origin',   '世界起源', Sparkles),
           leaf('worldview-natural',  '自然环境', Mountain),
           leaf('worldview-humanity', '人文环境', Users2),
+          leaf('history',            '历史年表', History),
           leaf('world-map',          '世界地图', Map),
         ],
       },
