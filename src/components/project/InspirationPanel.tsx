@@ -182,7 +182,7 @@ export default function InspirationPanel({ project }: Props) {
             value={inspiration}
             onChange={e => setInspiration(e.target.value)}
             placeholder={"随便写点什么...\n\n例如：\n- 一个在末世废墟中寻找失踪妹妹的退役军人\n- 古代宫廷里，一个替身公主发现了皇帝的秘密\n- 赛博朋克 + 修仙，用代码修炼的程序员\n- 甚至只是几个关键词：深海、孤岛、失忆、怪物"}
-            className="w-full text-sm bg-bg-input border border-border-default rounded-lg px-4 py-3 text-text-primary placeholder:text-text-muted resize-none"
+            className="w-full text-sm bg-bg-base border border-border-default rounded-lg px-4 py-3 text-text-primary placeholder:text-text-muted resize-none"
             minRows={5}
           />
         </section>
@@ -194,7 +194,7 @@ export default function InspirationPanel({ project }: Props) {
             value={userHint}
             onChange={e => setUserHint(e.target.value)}
             placeholder="例如：偏黑暗风格、需要感情线、主角要有反转..."
-            className="w-full text-sm bg-bg-input border border-border-default rounded px-3 py-2 text-text-primary placeholder:text-text-muted resize-none"
+            className="w-full text-sm bg-bg-base border border-border-default rounded px-3 py-2 text-text-primary placeholder:text-text-muted resize-none"
             minRows={2}
           />
         </section>
