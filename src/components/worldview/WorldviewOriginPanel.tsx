@@ -56,16 +56,25 @@ export default function WorldviewOriginPanel({ project }: Props) {
   const save = (patch: Partial<typeof worldview>) =>
     saveWorldview({ projectId: project.id!, ...patch })
 
-  // AI 上下文（排除当前字段）
+  // AI 上下文（排除当前字段，并注入自然环境 + 人文环境关键信息）
   const buildCtx = useCallback((excludeKey: string): string => {
     const parts: string[] = []
+    // ── 本面板内互参 ──
     if (excludeKey !== 'origin' && worldOrigin) parts.push(`【世界来源】${worldOrigin.slice(0, 200)}`)
     if (excludeKey !== 'power'  && powerHierarchy) parts.push(`【力量层次】${powerHierarchy.slice(0, 200)}`)
     if (excludeKey !== 'divine' && divineDesign.hasDivinity) {
       parts.push(`【神明与信仰】${divineDesign.divineNames || ''}：${divineDesign.divineRules?.slice(0, 100) || ''}`)
     }
+    // ── 自然环境面板关键字段 ──
+    if (worldview?.worldStructure)  parts.push(`【世界结构】${worldview.worldStructure.slice(0, 150)}`)
+    if (worldview?.continentLayout) parts.push(`【地貌分布】${worldview.continentLayout.slice(0, 150)}`)
+    if (worldview?.climateByRegion) parts.push(`【气候环境】${worldview.climateByRegion.slice(0, 100)}`)
+    // ── 人文环境面板关键字段 ──
+    if (worldview?.historyLine)     parts.push(`【世界历史线】${worldview.historyLine.slice(0, 150)}`)
+    if (worldview?.races)           parts.push(`【种族与民族】${worldview.races.slice(0, 100)}`)
+    if (worldview?.factionLayout)   parts.push(`【势力分布】${worldview.factionLayout.slice(0, 100)}`)
     return parts.join('\n')
-  }, [worldOrigin, powerHierarchy, divineDesign])
+  }, [worldOrigin, powerHierarchy, divineDesign, worldview])
 
   const handleStreamingChange = useCallback((key: string, streaming: boolean) => {
     setStreamingKeys(prev => {

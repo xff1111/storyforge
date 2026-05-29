@@ -59,13 +59,21 @@ export default function WorldviewNaturalPanel({ project }: Props) {
 
   const buildCtx = useCallback((skipCtxKey: string): string => {
     const parts: string[] = []
+    // ── 世界起源面板关键字段 ──
+    if (worldview?.worldOrigin)    parts.push(`【世界来源】${worldview.worldOrigin.slice(0, 200)}`)
+    if (worldview?.powerHierarchy) parts.push(`【力量层次】${worldview.powerHierarchy.slice(0, 150)}`)
+    // ── 本面板内互参 ──
     for (const f of FIELDS) {
       if (f.ctxKey !== skipCtxKey && values[f.key]) {
         parts.push(`【${f.ctxLabel}】${values[f.key].slice(0, 150)}`)
       }
     }
+    // ── 人文环境面板关键字段 ──
+    if (worldview?.historyLine)   parts.push(`【世界历史线】${worldview.historyLine.slice(0, 150)}`)
+    if (worldview?.races)         parts.push(`【种族与民族】${worldview.races.slice(0, 100)}`)
+    if (worldview?.factionLayout) parts.push(`【势力分布】${worldview.factionLayout.slice(0, 100)}`)
     return parts.join('\n')
-  }, [values])
+  }, [worldview, values])
 
   const handleStreamingChange = useCallback((key: string, streaming: boolean) => {
     setStreamingKeys(prev => {
