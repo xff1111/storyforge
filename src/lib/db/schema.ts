@@ -40,6 +40,7 @@ import type {
   WorldRulesProfile,
   WorldGroup,
   WorldGroupLink,
+  ItemLedgerEntry,
 } from '../types'
 
 class StoryForgeDB extends Dexie {
@@ -107,6 +108,9 @@ class StoryForgeDB extends Dexie {
   // Phase 25.4 —— 多世界系统
   worldGroups!: Table<WorldGroup, number>
   worldGroupLinks!: Table<WorldGroupLink, number>
+
+  // Phase 25.5.2-b —— 物品流水（游戏包裹式物品栏）
+  itemLedger!: Table<ItemLedgerEntry, number>
 
   constructor() {
     super('storyforge')
@@ -237,6 +241,11 @@ class StoryForgeDB extends Dexie {
     this.version(22).stores({
       worldGroups: '++id, projectId, type, order',
       worldGroupLinks: '++id, projectId, fromGroupId, toGroupId',
+    })
+
+    // Phase 25.5.2-b: 物品流水（物品栏）
+    this.version(23).stores({
+      itemLedger: '++id, projectId, itemName, chapterId',
     })
   }
 }

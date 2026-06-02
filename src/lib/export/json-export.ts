@@ -10,7 +10,7 @@ import type {
   HistoricalTimelineEvent, HistoricalKeyword,
   MasterWork, MasterChunkAnalysis, MasterChapterBeat,
   MasterStyleMetrics, MasterInsight,
-  WorldGroup, WorldGroupLink,
+  WorldGroup, WorldGroupLink, ItemLedgerEntry,
 } from '../types'
 
 /**
@@ -74,6 +74,9 @@ export interface ProjectExportData {
     _fromGroupExportId: number
     _toGroupExportId: number
   })[]
+
+  // ── v3: 物品流水（Phase 25.5.2-b，chapterId 可空）──
+  itemLedger?: (Omit<ItemLedgerEntry, 'id' | 'projectId' | 'chapterId'> & { _chapterExportId: number | null })[]
 }
 
 /** 导出项目为 JSON */
@@ -93,7 +96,7 @@ export async function exportProjectJSON(projectId: number): Promise<ProjectExpor
     refs, historicalTimelineEvents, historicalKeywords,
     masterWorks, masterInsights,
     // v3
-    worldGroups, worldGroupLinks,
+    worldGroups, worldGroupLinks, itemLedger,
   ] = await Promise.all([
     db.worldviews.where('projectId').equals(projectId).toArray(),
     db.storyCores.where('projectId').equals(projectId).toArray(),
@@ -125,6 +128,8 @@ export async function exportProjectJSON(projectId: number): Promise<ProjectExpor
     // v3: 多世界系统
     db.worldGroups.where('projectId').equals(projectId).sortBy('order'),
     db.worldGroupLinks.where('projectId').equals(projectId).toArray(),
+    // v3: 物品流水
+    db.itemLedger.where('projectId').equals(projectId).toArray(),
   ])
 
   // ── 构建 ID 映射 ──
@@ -277,6 +282,10 @@ export async function exportProjectJSON(projectId: number): Promise<ProjectExpor
       ...rest,
       _fromGroupExportId: worldGroupIdMap.get(fromGroupId) ?? 0,
       _toGroupExportId: worldGroupIdMap.get(toGroupId) ?? 0,
+    })),
+    itemLedger: itemLedger.map(({ id: _, projectId: _p, chapterId, ...rest }) => ({
+      ...rest,
+      _chapterExportId: chapterId != null ? (chapterIdMap.get(chapterId) ?? null) : null,
     })),
   }
 }
@@ -561,6 +570,17 @@ export async function importProjectJSON(data: ProjectExportData): Promise<number
         toGroupId: toId,
       } as WorldGroupLink)
     }
+  }
+
+  // 26.5 物品流水（v3，chapterId 重映射）
+  for (const e of data.itemLedger || []) {
+    const { _chapterExportId, ...rest } = e
+    const newChapterId = _chapterExportId != null ? (newChapterIds.get(_chapterExportId) ?? null) : null
+    await db.itemLedger.add({
+      ...rest,
+      projectId: newProjectId,
+      chapterId: newChapterId,
+    } as ItemLedgerEntry)
   }
 
   // 27. 重映射所有 worldGroupId 引用

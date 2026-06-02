@@ -53,6 +53,7 @@ import StoryArcPanel from '../components/outline/StoryArcPanel'
 import CharacterDrivenPlotPanel from '../components/outline/CharacterDrivenPlotPanel'
 import InspirationPanel from '../components/project/InspirationPanel'
 import LocationPanel from '../components/location/LocationPanel'
+import InventoryPanel from '../components/items/InventoryPanel'
 import WorldGroupOverview from '../components/world-group/WorldGroupOverview'
 import { useLocationStore } from '../stores/location'
 import { useWorldGroupStore } from '../stores/world-group'
@@ -207,6 +208,8 @@ export default function WorkspacePage() {
         return <StoryArcPanel project={project} />
       case 'state-table':
         return <StatePanel project={project} />
+      case 'inventory':
+        return <InventoryPanel project={project} />
 
       // 作品学习已整合进项目参考 → 深度分析 tab（Phase 20）
       case 'master-studies':

@@ -47,6 +47,8 @@ export type PromptModuleKey =
   // —— Phase 25.4 多世界 ——
   | 'world-group.suggest'
   | 'world-group.expand'
+  // —— Phase 25.5.2-b 物品栏 ——
+  | 'inventory.extract'
   // —— Phase 19 作品学习 ——
   | 'master.analyze-chunk'
   | 'master.extract-beats'
