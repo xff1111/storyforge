@@ -7,7 +7,7 @@
 import { useState, useEffect } from 'react'
 import {
   Lightbulb, Sparkles, Loader2, Check, ChevronDown, ChevronRight,
-  Globe, BookOpen, UserCircle, ArrowDownToLine,
+  Globe, BookOpen, UserCircle, ArrowDownToLine, Download,
 } from 'lucide-react'
 import { useWorldviewStore } from '../../stores/worldview'
 import { useCharacterStore } from '../../stores/character'
@@ -51,9 +51,28 @@ export default function InspirationPanel({ project }: Props) {
   const ai = useAIStream()
   const isMW = !!project.enableMultiWorld
 
+  const draftKey = `sf-inspiration-draft-${project.id}`
   const [inspiration, setInspiration] = useState('')
   const [userHint, setUserHint] = useState('')
   const [result, setResult] = useState<ReverseResult | null>(null)
+
+  // 灵感草稿持久化：进入时加载、变化时保存（切走不丢）
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(draftKey)
+      if (saved) {
+        const d = JSON.parse(saved)
+        setInspiration(d.inspiration || '')
+        setUserHint(d.userHint || '')
+      }
+    } catch { /* ignore */ }
+  }, [draftKey])
+  useEffect(() => {
+    const t = setTimeout(() => {
+      try { localStorage.setItem(draftKey, JSON.stringify({ inspiration, userHint })) } catch { /* ignore */ }
+    }, 500)
+    return () => clearTimeout(t)
+  }, [draftKey, inspiration, userHint])
   const [mwResult, setMwResult] = useState<ReverseMultiWorldResult | null>(null)
   const [mwAdopted, setMwAdopted] = useState(false)
   const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set(['worldview', 'storyCore', 'characters']))
@@ -191,6 +210,63 @@ export default function InspirationPanel({ project }: Props) {
     }
   }
 
+  // 导出反推结果为 Markdown 文件
+  const handleExportResult = () => {
+    const lines: string[] = [`# ${project.name} — 灵感反推结果\n`]
+    if (inspiration.trim()) lines.push(`## 原始灵感\n${inspiration}\n`)
+    if (mwResult) {
+      const sc = mwResult.storyCore
+      lines.push(`## 故事主线`)
+      if (sc.logline) lines.push(`- 一句话：${sc.logline}`)
+      if (sc.theme) lines.push(`- 主题：${sc.theme}`)
+      if (sc.centralConflict) lines.push(`- 核心冲突：${sc.centralConflict}`)
+      if (sc.mainPlot) lines.push(`- 主线：${sc.mainPlot}`)
+      lines.push('')
+      mwResult.worlds.forEach((w, i) => {
+        lines.push(`## 世界 ${i + 1}：${w.name}（${w.type}）`)
+        if (w.worldOrigin) lines.push(`- 世界来源：${w.worldOrigin}`)
+        if (w.powerHierarchy) lines.push(`- 力量层次：${w.powerHierarchy}`)
+        if (w.continentLayout) lines.push(`- 地貌分布：${w.continentLayout}`)
+        if (w.historyLine) lines.push(`- 世界历史：${w.historyLine}`)
+        if (w.factionLayout) lines.push(`- 势力分布：${w.factionLayout}`)
+        if (w.entryCondition) lines.push(`- 进入条件：${w.entryCondition}`)
+        if (w.powerRestriction) lines.push(`- 能力限制：${w.powerRestriction}`)
+        lines.push('')
+      })
+      if (mwResult.characters.length) {
+        lines.push(`## 初始角色`)
+        mwResult.characters.forEach(c => {
+          const home = c.isCrossWorld ? '跨世界' : (c.homeWorld || '')
+          lines.push(`- **${c.name}**（${ROLE_LABELS[c.role] || c.role}${home ? ` · ${home}` : ''}）：${c.shortDescription}`)
+        })
+      }
+    } else if (result) {
+      const wv = result.worldview, sc = result.storyCore
+      lines.push(`## 世界观`)
+      if (wv.worldOrigin) lines.push(`- 世界来源：${wv.worldOrigin}`)
+      if (wv.powerHierarchy) lines.push(`- 力量层次：${wv.powerHierarchy}`)
+      if (wv.continentLayout) lines.push(`- 地貌分布：${wv.continentLayout}`)
+      if (wv.historyLine) lines.push(`- 世界历史：${wv.historyLine}`)
+      if (wv.factionLayout) lines.push(`- 势力分布：${wv.factionLayout}`)
+      lines.push(`\n## 故事核心`)
+      if (sc.logline) lines.push(`- 一句话：${sc.logline}`)
+      if (sc.theme) lines.push(`- 主题：${sc.theme}`)
+      if (sc.centralConflict) lines.push(`- 核心冲突：${sc.centralConflict}`)
+      if (sc.mainPlot) lines.push(`- 主线：${sc.mainPlot}`)
+      if (result.characters.length) {
+        lines.push(`\n## 初始角色`)
+        result.characters.forEach(c => lines.push(`- **${c.name}**（${ROLE_LABELS[c.role] || c.role}）：${c.shortDescription}`))
+      }
+    }
+    const blob = new Blob([lines.join('\n')], { type: 'text/markdown' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `${project.name}-灵感反推.md`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
   const toggleSection = (key: string) => {
     setExpandedSections(prev => {
       const next = new Set(prev)
@@ -287,6 +363,14 @@ export default function InspirationPanel({ project }: Props) {
         <Lightbulb className="w-5 h-5 text-yellow-500" />
         <h2 className="text-lg font-semibold text-text-primary">灵感反推</h2>
         <span className="text-xs text-text-muted ml-2">从碎片想法反推完整故事框架</span>
+        {(result || mwResult) && (
+          <button
+            onClick={handleExportResult}
+            className="ml-auto flex items-center gap-1 px-2.5 py-1 text-xs rounded-lg bg-bg-elevated text-text-secondary border border-border hover:text-accent hover:border-accent/50 transition-colors"
+          >
+            <Download className="w-3.5 h-3.5" /> 导出结果
+          </button>
+        )}
       </div>
 
       <div className="flex-1 overflow-y-auto p-4 space-y-5">
