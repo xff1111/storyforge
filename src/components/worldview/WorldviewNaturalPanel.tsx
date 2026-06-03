@@ -205,6 +205,11 @@ function SimpleFieldEditor({ field, value, onChange, project, contextSummary, on
       <div>
         <h3 className="text-lg font-semibold text-text-primary">{field.emoji} {field.label}</h3>
         <p className="mt-1 text-sm text-text-muted">{field.desc}</p>
+        {(field.key === 'continentLayout' || field.key === 'regionDimensions') && (
+          <p className="mt-1.5 text-xs text-accent/80 bg-accent/5 border border-accent/15 rounded px-2 py-1">
+            💡 这里写地貌/重镇概述；可视化地图与具体地点请到「🗺️ 世界地图」生成和管理。
+          </p>
+        )}
       </div>
 
       <div className="bg-bg-surface border border-border rounded-lg p-4">

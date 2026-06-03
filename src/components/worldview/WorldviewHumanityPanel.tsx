@@ -20,16 +20,18 @@ interface FieldMeta {
   emoji: string
   label: string
   description: string
+  /** 与独立管理面板重叠时的导航提示 */
+  hint?: string
 }
 
 const FIELDS: FieldMeta[] = [
-  { key: 'history',   field: 'historyLine',            emoji: '📜', label: '世界历史线',     description: '从远古到当下的时间脉络（朝代 / 时代 / 关键节点 / 架空度）' },
-  { key: 'events',    field: 'worldEvents',            emoji: '📅', label: '世界大事记',     description: '改变世界格局的重大事件（战争、王朝兴替、灾劫……）' },
+  { key: 'history',   field: 'historyLine',            emoji: '📜', label: '世界历史线',     description: '从远古到当下的时间脉络（朝代 / 时代 / 关键节点 / 架空度）', hint: '这里写概述脉络；具体事件、纪年与考证请到「📜 历史年表」逐条管理。' },
+  { key: 'events',    field: 'worldEvents',            emoji: '📅', label: '世界大事记',     description: '改变世界格局的重大事件（战争、王朝兴替、灾劫……）', hint: '这里写大事概览；详细时间线事件请到「📜 历史年表」管理。' },
   { key: 'races',     field: 'races',                  emoji: '🧬', label: '种族与民族',     description: '不同种族 / 民族的特征、能力、历史与关系' },
   { key: 'factions',  field: 'factionLayout',          emoji: '⚔',  label: '势力分布',       description: '主要势力（门派 / 朝廷 / 商会 / 党派……）的格局和敌友关系' },
   { key: 'pec',       field: 'politicsEconomyCulture', emoji: '🏛', label: '政治/经济/文化', description: '政体 / 货币 / 赋税 / 阶层制度 / 宗教信仰 / 风俗节庆' },
   { key: 'conflicts', field: 'internalConflicts',      emoji: '🔥', label: '矛盾冲突',       description: '社会内在矛盾 / 阶级冲突 / 个体与集体冲突 / 与外部世界的张力' },
-  { key: 'items',     field: 'itemDesign',             emoji: '🗡', label: '道具与器物',     description: '武器 / 法器 / 工具 / 科技装备……物品的来源、品级、规则' },
+  { key: 'items',     field: 'itemDesign',             emoji: '🗡', label: '道具与器物',     description: '武器 / 法器 / 工具 / 科技装备……物品的来源、品级、规则', hint: '这里写物品体系概述；具体道具条目请到「💎 道具系统」管理，主角随身物品由「🎒 物品栏」自动追踪。' },
 ]
 
 // ── 主面板 ─────────────────────────────────────────────────────
@@ -209,6 +211,11 @@ function HumanityFieldEditor({
       <div>
         <h3 className="text-lg font-semibold text-text-primary">{meta.emoji} {meta.label}</h3>
         <p className="mt-1 text-sm text-text-muted">{meta.description}</p>
+        {meta.hint && (
+          <p className="mt-1.5 text-xs text-accent/80 bg-accent/5 border border-accent/15 rounded px-2 py-1">
+            💡 {meta.hint}
+          </p>
+        )}
       </div>
 
       <div className="bg-bg-surface border border-border rounded-xl p-4">
