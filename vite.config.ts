@@ -62,6 +62,7 @@ export default defineConfig({
   base: '/storyforge/',
   server: {
     port: 1111,
+    host: '0.0.0.0',
     open: '/storyforge/',
     proxy: {
       '/deepseek-proxy': {
