@@ -226,6 +226,17 @@
 | **上下文快照世界观为空** | `context-snapshot`（注入写作的「上下文快照」）只读 v2 字段 → v3 用户快照世界观空白 | 🟠 | 改读 v3，v2 仅兜底 |
 | **故事核心生成上下文过薄** | `StoryCorePanel` 世界上下文仅 worldOrigin 一个字段 | 🟡 | 补力量/种族/势力/历史线等关键字段 |
 | 消耗类型补标 | 故事年表提取/物品提取/批量章纲/工作流 的 AI 调用未分类 | — | 已补 category |
+| **细纲 getOrCreate 重复风险** | `detailed-outline.getOrCreate` 仅查内存 state，store 未加载/竞态时会对同一节点重复建细纲 | 🟡 数据 | 内存未命中时按 outlineNodeId 查 DB 兜底 |
+
+**第五批额外核对安全**：useAutoSave（refs→最新数据 + 卸载 flush，无陈旧闭包）；useAutoBackup 复用 export（含数据丢失修复）；useBeforeUnload 正常；批量 abort 正确复位；关系提取经 `matchRelations` 解析 name→id；prompt-engine 缺失变量→空串不漏占位；world-map nations「culture 复用」注释为误导（cells 未改，无 bug）；world-map 为视觉子系统，bug 不影响小说数据。
+
+**本次全量审计扫描覆盖**：导出/导入/快照/自动备份（数据完整性）、全部 AI 生成与提取上下文（v2/v3 + 单/多世界）、全部解析器与 prompt 种子字段对齐、所有单例/集合 store 的写入幂等、自动保存/卸载/关闭数据安全、跨项目泄漏、JSON.parse 健壮性、abort/错误恢复、死代码。
+
+**第六批：world-map 子系统 + 导出完整性终检（2026-06-04）**
+- world-map 数据路径安全：地图配置存 `worldNodes.mapConfigJSON`（**已在导出覆盖范围内**），渲染结果按 seed 确定性重算、不持久化 → 无数据丢失；地图生成解析由调用方 try/catch 保护。world-map 渲染算法属纯视觉，bug 仅影响地图长相、不涉小说数据，未逐行验证（需运行时验证）。
+- **导出完整性终检**：逐一核对 27 张表，未导出的 `snapshots`（本地版本历史）/ `promptTemplates`·`promptWorkflows`（全局 scope=system/user，非项目数据）/ `importJobs·Sessions·Logs·Files`（临时导入态）/ `aiUsageLog`（统计）**均为合理排除**（app 级/临时/统计）。**项目内容表已全部纳入导出**。
+
+> ✅ 结论：除 world-map 视觉渲染算法（需运行时验证）外，**涉及小说数据完整性与 AI 贯通的代码已全量静态扫描完毕**，发现的问题已全部修复或记入待开发。
 
 **核对确认安全（排除嫌疑）**：
 - 版本快照还原复用 export/import（已含数据丢失修复）；`ensure-schema` REQUIRED_TABLES 保守（不误删老用户）。
@@ -254,6 +265,90 @@
 ### 根因与根治
 
 绝大多数已修项源于**同一个病根**：上下文读取没有单一入口，字段散落在多个 builder/面板里手写，加字段不收口 → 必然漏、必然漂移。本轮已：① 用「三个共享格式化函数」收口世界观/故事核心/力量体系（消除字段漏读与单/多世界漂移）；② 用 `buildNodeWritingContext` 收口「按章节解析所属世界」（消除场景/细纲/角色多世界串台）。剩余 D/E/G/H/I 多为低severity 或需权衡，**彻底根治仍需 R-1 统一上下文装配层**。
+
+---
+
+## 三-quater、功能逻辑审计（核心写作链路，2026-06-04）
+
+> 逐个读核心功能的业务逻辑找 bug（非数据/AI 流，是功能本身正确性）。
+
+### ✅ 已修复
+
+| 功能 | bug | 修复 |
+|------|-----|------|
+| **状态表 `applyDiffs`**（状态提取，核心高频） | ① 同一**新实体**的多条字段变更各建一张卡 → 同名重复卡；② 同一**已有实体**的多条字段变更各自从陈旧快照 parse 再写 → 互相覆盖、只剩最后一条字段。一个角色一章常同时改 位置+状态+持有物，**经常触发** | 按 (category, entityName) 聚合本批次所有 diff、逐实体合并字段后统一写库 |
+
+### 🟠 发现的问题（已记录）
+
+| 功能 | 问题 | 处置 |
+|------|------|------|
+| **上下文预算自动裁剪** `autoTrimToFit` | 实现了但**只用于显示**（ContextBudgetBar 算"会裁哪些层"给用户看），实际发送的上下文从不真裁 → 超出模型窗口时直接 API 报错而非优雅降级（多数被三层记忆预算兜住，但 L3 引用/洞察可叠加超限） | 记入 ROADMAP（需 token-aware 组装才能真裁，非小改） |
+| **三层记忆 semantic 预算** | write 模式 semantic 仅 2000 字，要塞 世界观+角色+伏笔；补全世界观字段后 worldContext 可达 3000 → 截断，伏笔排其后易被挤掉 | 调优项：复核预算或调整层内顺序（角色另有独立 prompt 槽，伏笔仅此一处需留量） |
+
+### ✅ 核对无误
+
+- 物品栏 / 故事年表 **重新提取**：均先 `deleteByChapter` 再 add → 无重复累加（**正确**，与状态表旧 bug 形成对比）。
+- 工作流 `inputMapping`：全部 seed 仅用 `previousOutput`，WorkflowRunner 实现覆盖到位。
+- 伏笔 `updateStatus` 仅改状态、不自动联动埋设/回收章节（埋设章节为用户显式设置，设计如此）。
+- 导入续跑：scanIncomplete + loadBlob + 续跑结构完整。
+- 故事块层级（卷→故事块→章）：parentId + order（取 siblings.length）正确。
+- 参考分析分块/合并、master-studies 流水线（workId 维度）、AI 配置预设（localStorage 增删改）、写作风格注入（代码定义预设按 id 查）：逻辑健全，无字段错位。
+- ⚠️ `filterActiveCharacters` 用章节 **ID** 比较当作故事顺序（`exitChapterId < currentChapterId`），章节重排后理论上会错；但 `firstAppearChapterId/exitChapterId` **全项目无 UI 写入**（恒空）→ filter 实际等于返回全部，**当前休眠无影响**。如未来加这两字段的 UI，需改为按 `order` 比较。
+
+> **功能逻辑审计结论**：核心写作链路（三层记忆 / 状态提取 / 物品·年表 / 伏笔 / 工作流 / 大纲块 / 参考分析 / 配置预设 / 风格注入）逐个读过；除状态表 `applyDiffs` 一个真 bug（已修）外，其余逻辑健全，另记 2 个调优/降级项（autoTrimToFit 真裁剪、记忆 semantic 预算）与 1 个休眠边界（filterActiveCharacters）。
+
+---
+
+## 三-quinque、复核（审计自身，逐条核对记录真伪，2026-06-04）
+
+> 应要求对前述全部记录逐条回查代码，验证「已修」是否真在、「安全」是否属实、有无记错。
+
+### 🔴 复核中新发现并修复（之前漏掉）
+
+| # | 问题 | 修复 |
+|---|------|------|
+| **deleteGroup 孤儿数据** | 删世界组时级联删了 worldview/power/geo/histories/worldNodes，**漏删 `historicalTimelineEvents` / `historicalKeywords` / `codexEntries` / 该世界自定义 `codexCategories`**（均带 worldGroupId）→ 删世界后留死数据 | 补齐这四类的级联删除 |
+| **migrateToMultiWorld 漏盖章 codex** | 开多世界时把 worldview 等盖章到主世界，**漏了 `codexEntries`** → 现有词条不归主世界而残留 null=全局，会泄漏到所有世界（斗破显示遮天的矿物） | 补 `stamp(codexEntries)`（仅词条；内置/自定义「分类」保持全局 null，所有世界共用结构，不盖章） |
+
+### ✏️ 记录订正（之前记得不够准）
+
+- **「naturalResources/itemDesign 注入·codex 无双轨」**订正：codex（35-a）已上线，**若用户同时填了世界观自由文本字段与词条，会有少量重复注入**（非 bug，仅冗余 token）；35-b 迁移后消除。原"无双轨"表述不准确。
+
+### ✅ 复核确认「已修/安全」属实（抽查无误）
+
+- 三表导出/导入（importantLocations/worldRulesProfiles/codex）：query + 数据对象 + 还原 + codex worldGroupId remap **四处俱全**。
+- 三个共享格式化函数：`buildCurrentWorldContext` 与 `buildNodeWritingContext` **确实都 import 且调用**。
+- SVG 清洗 `sanitizeSvg`：确实在 `setSvgContent` 处应用。
+- 状态表 `applyDiffs` 新聚合逻辑：existing 更新 + 新建分支均正确。
+- `buildNodeWritingContext` 单世界路径：wv/sc/ps 三者均加载、用共享函数。
+- `client.ts` 流式 `JSON.parse` 确在 try/catch（「JSON.parse 均受保护」属实）。
+- **BUG-EXPORT-WG 分析复核为真**：export 的 worldGroupId 是 `...rest` 原始 id（未转 index），import `remap` 用 export-index 表查 → 键不匹配确会丢世界归属。记录准确。
+
+> 复核结论：已修项均真实在位且正确；安全项抽查属实；订正 1 处表述（codex 双轨）；**复核过程本身又揪出 2 个之前漏掉的多世界数据完整性 bug（deleteGroup 孤儿、migrate 漏盖章 codex）并已修**。
+
+---
+
+## 三-sex、删除引用完整性审计（之前完全未扫的一类，2026-06-04）
+
+> 扫「删除某条数据时，引用它的数据会不会变成悬空孤儿」。这一整类之前没专门查过，结果扫出 4 个真 bug。
+
+### 🔴 已修复
+
+| 删除操作 | 孤儿问题 | 修复 |
+|---------|---------|------|
+| **deleteNode（大纲节点）** | 级联删了子节点，但**漏删挂在节点上的 `chapters`（正文内容！）+ `detailedOutlines`** → 删大纲后正文成不可达孤儿 | 按 outlineNodeId 级联删除 chapters + detailedOutlines |
+| **deleteCharacter** | **漏删引用该角色的 `characterRelations`** → 关系网显示「角色#id」断链 | 按 from/toCharacterId 清理关系 |
+| **deleteChapter** | 漏删紧耦合的 `emotionBeatCards` | 补清理（物品/年表/伏笔的 chapterId 软引用保留——属独立产物，语义不明确不强删） |
+| **deleteProject（重大）** | 级联约 30 表，却**漏了 `importantLocations` / `worldRulesProfiles` / `codexCategories` / `codexEntries` / `aiUsageLog`** → 删项目后这些用户内容永久孤儿 | 补齐这 5 张表的级联删除 |
+
+### ✅ 核对无误
+
+- deleteReference 级联 referenceChunkAnalysis、codex deleteCategory 级联 entries、deleteGroup 级联世界数据（上一批已补全）：均正确。
+
+### ⚠️ 反复出现的根因（架构建议）
+
+`importantLocations / worldRulesProfiles / codex` 这几张较新的表，已被发现**反复漏接入生命周期操作**：导出（已修）、deleteProject（本批已修）、deleteGroup（上批已修）、migrateToMultiWorld（上批已修）。根因同「上下文装配漂移」：**没有一份「项目全部表」的唯一清单**，每个生命周期操作各自手列表 → 加新表必漏某处。
+**建议**：建一份 `PROJECT_TABLES` 注册表（含每表的 projectId/worldGroupId/外键信息），export / deleteProject / deleteGroup / migrate 全部从它派生 → 加新表只改一处，杜绝此类漏接。已记入 ROADMAP。
 
 ---
 

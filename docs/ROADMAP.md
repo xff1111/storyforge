@@ -187,6 +187,20 @@
 
 ## 🔴 优先级：高
 
+### Phase 40 — 「真实与幻想」多世界联动（每世界一套世界规则）
+
+> 📐 完整设计文档：`docs/WORLD-RULES-MULTIWORLD-DESIGN.md`（含表结构、功能逻辑、9 处调用点传值表、漏洞清单 A–I 逐条对策）
+>
+> 来源：用户指出（2026-06-04）真实与幻想未与多世界联动 | 文件：`world-rules.ts` / `WorldRulesPanel.tsx` / `world-rules-manifest.ts` / `world-group.ts` / `db/schema.ts`
+
+**问题**：`worldRulesProfiles` 现为项目级单例（`&projectId` 唯一），`buildWorldRulesContext(projectId)` 项目级注入 → 多世界下所有世界共用一套真实/幻想规则（诸天流斗破=全架空、大明=取自真实本应各异）。
+
+**方案要点**：profile 加 `worldGroupId`（每 (projectId, worldGroupId) 一条），面板加世界标签（仿 HistoryPanel），`buildWorldRulesContext(projectId, worldGroupId?)` 含「默认世界解析」，9 个调用点逐一定死传值，迁移 stamp/删除级联/导出 remap 全部补 worldRulesProfiles。
+
+**已设计好的 9 处漏洞对策**（见设计文档 §三）：默认世界回退、禁跨世界污染、防重复 profile、防漏注入、迁移不丢、删除不留孤儿、导出归属正确（依赖 BUG-EXPORT-WG）、单世界零影响、切换标签先 persist。
+
+---
+
 ### BUG-EXPORT-WG — 多世界导出/导入 worldGroupId 重映射键值错位（数据完整性）
 
 > 来源：全量审计（2026-06-04）修数据丢失时顺带发现 | 影响：仅多世界项目的「导出备份 → 导入恢复」；单世界无影响 | 文件：`src/lib/export/json-export.ts`
@@ -526,6 +540,21 @@
 ---
 
 ## 🔵 优先级：低（远期）
+
+### 架构·项目表唯一注册表（防"新表漏接生命周期"）
+
+> 来源：删除引用完整性审计发现的反复根因 | 中优先
+
+`importantLocations / worldRulesProfiles / codexCategories / codexEntries / aiUsageLog` 等较新表反复漏接入生命周期操作（导出 / deleteProject / deleteGroup / migrateToMultiWorld 各自手列表）。建一份 `PROJECT_TABLES` 唯一注册表（每表标注 projectId / worldGroupId / 外键 / 是否树形），让 export·导入·deleteProject·deleteGroup·migrate 全从它派生 → 加新表只改一处，结构性杜绝漏接。与「统一上下文装配层 R-1」是同一类"单一事实源"思路。
+
+### 审计遗留低优先项（2026-06-04 全量审计）
+
+- **上下文预算真裁剪**（功能逻辑审计发现）：`autoTrimToFit` 已实现但仅用于 UI 显示「会裁哪些层」，**实际发送的上下文从不真裁** → 超出模型窗口时直接 API 报错而非逐层降级。多数场景被三层记忆字符预算兜住，但 L3（参考分析/大师洞察引用）可叠加超限。根治需把上下文组装改为 token-aware（按 segment 真删 L3→L2→L1）再发送。中优先。
+
+- **提示词内容质量审查**（#4）：本次审计只核对了提示词与解析器的「字段 key 对齐」，未评估提示词本身产出质量。后续可逐个 prompt seed 评估输出是否达标、是否需调优。属调优非 bug。
+- **性能·懒加载应用面板**（#5 续）：已完成——重型依赖 pdfjs/mammoth 改动态 import（首屏少加载 ~866KB）、three.js 本就动态、vite 拆 vendor-react。**剩余**：主包仍 ~1.93MB（应用代码 + dexie/zustand/lucide/canvas 渲染），进一步可用 `React.lazy` 懒加载重面板（3D 地图 / 作品学习 / 导入 / 世界地图）。中低优先。
+- **响应式/移动端**（#6）：经核查全项目仅 5 文件用响应式断点，App 为**桌面专用**（与「移动端适配低优先」一致）；硬编码尺寸均为合理约束 + 正确 overflow，**未发现 CSS bug**。移动端适配维持低优先不做。
+- **UI 交互行为运行时走查**（#2 续）：静态扫已确认无「条件 hooks 崩溃 / 列表缺 key」；可编辑列表少数用 index 作 key（删中间项可能 input 错位，轻微）。深层交互（点按生效/弹窗/状态更新）建议运行时逐面板走查补充。
 
 ### Phase 27 — AI Agent 化（对话副驾 + 后台 Agent）
 
