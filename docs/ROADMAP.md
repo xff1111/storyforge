@@ -185,7 +185,64 @@
 
 # ═══ 待开发（按优先级排列）═══
 
+> 📐 **施工权威已转移**：项目重构请以 `docs/MASTER-BLUEPRINT.md`（v2 · 最终蓝图）为唯一依据。
+> 本 ROADMAP 中所有"架构地基级"任务均已纳入 MASTER-BLUEPRINT 的 Phase 0/1/2/3，本节保留索引但不再独立维护。
+
 ## 🔴 优先级：高
+
+### 🏗️ 项目重构（主线工作 · 见 MASTER-BLUEPRINT）
+
+**👉 见 `docs/MASTER-BLUEPRINT.md`**
+
+四个阶段（必须严格串行）：
+- **Phase 0 · 紧急修复**（3–5 天）：7 项 P0 修复，含 `deleteGroup`/`migrateToMultiWorld` 事务作用域、`ensureSchema` 删库风险、`BUG-EXPORT-WG`、`importProjectJSON` 事务化、`deleteProject` 漏间接归属表、`deleteNode` 绕过 `deleteChapter`
+- **Phase 1 · 三支柱地基（强化版）**（10–15 天）：`PROJECT_TABLES`（含 JSON/数组/间接归属/Blob owner）+ `FIELD_REGISTRY + AdoptionSchema` + `CONTEXT_SOURCES + 真裁剪`
+- **Phase 2 · 内容完整性 + 多世界贯通**（7–10 天）：Phase 40 真实与幻想多世界化、chapter-adapter 接 worldRulesContext、AIFieldCard 传 currentValue、chunk-writer 支持 worldGroupId、批量正文 worldContextResolver、角色 JSON 引用 remap
+- **Phase 3 · 精品化**（10–15 天）：AI 说明书自动生成器、测试体系、CI lint、安全加固、性能、文档体系收口
+
+---
+
+### 🏗️ 架构地基重构（三根支柱） — 项目地基级改造（v1 设计 · 已升级到 MASTER-BLUEPRINT）
+
+> 📐 完整设计文档：`docs/ARCHITECTURE-REFACTOR.md`（含数据结构、API、迁移示例、验证策略、风险对策、完成判据）
+>
+> 来源：本轮全量审计反复发现的同类大漏洞的结构性根因 | 用户决策：「这一波要全都给它重构，要做成坚实的项目地基」
+
+**为什么**：本轮 17 个已修 bug 中，**导出漏 5 表 / deleteProject 漏 5 表 / deleteGroup 漏 3 表 / migrate 漏 codex** 4 个根因相同（生命周期手列表）；**6 处上下文漏注入 + 多世界串台 4 处**根因相同（上下文手挑组合）；**灵感反推采纳为空 + 单例工厂重复**根因相同（写回散落 + 内存定位）。**只要不收口，加新功能时同类 bug 会继续冒新的。**
+
+**三根支柱**：
+1. **Stage A · `PROJECT_TABLES` 注册表**（生命周期单一事实源）—— 所有表的元信息（项目级/世界级/外键/可导出/重映射）声明在唯一一处；export/import/deleteProject/deleteGroup/migrate 全部派生。**加新表只改一处。** 顺带修 BUG-EXPORT-WG。
+2. **Stage B · R-2 统一采纳写回层 + `FIELD_REGISTRY`**（写侧单一事实源）—— 规范字段表 + `adopt()` 入口 + 自动别名映射 + 类型校验 + 未知字段告警 + 以 DB 为准定位（杜绝重复记录）。**字段映射不再手写。**
+3. **Stage C · R-1 统一上下文装配层 + `CONTEXT_SOURCES`**（读侧单一事实源）—— 上下文源注册表 + `assembleContext()` 入口；面板只声明 `need: ['worldview', 'codex', …]`。**加新源只改一处。** 顺带修 BUG-INPUT-WITH-GEN（工作流复用 adapter + assembleContext）。
+
+**实施顺序（设计文档第五节）**：A → B → C 严格串行；每个 Stage 内部再分子步、每子步独立 commit 可单回滚；旧函数保留作适配器直到最后下线。
+
+**验证**：每个 Stage 单元测试 ≥ 15 条；本轮 17 个已修 bug 全部写成"反例测试"防复现；多世界往返冒烟。
+
+**收益**：根治 4 类反复漏洞 + 简化所有未实现 Phase（38/39/40/34/35-b/35-c）的实施成本。
+
+---
+
+### BUG-INPUT-WITH-GEN — 文本框应可用户自行输入，且 AI 生成时带上用户已输入内容（通用原则）
+
+> 来源：社区反馈 + 用户明确诉求（2026-06-04）。最初表现：「从零到第一章」工作流第一步「一句话故事」用户无法输入。
+> 文件：`src/components/settings/prompt/WorkflowRunner.tsx`（重灾区）、`src/components/shared/AIFieldCard.tsx`、各调用 AIFieldCard/AI 生成按钮的面板。
+
+**用户诉求（通用原则，按此实现）**：
+> 每个文本框都应能让用户**自己输入**内容；当用户点击该文本框对应的「AI 生成」按钮时，**把用户已输入的内容自动带进提示词**，在用户写的基础上生成/扩展（而不是无视用户输入从零生成）。
+
+**已核实的现状**：
+1. **工作流步骤卡（WorkflowRunner StepCard）= 重灾区**：步骤卡**完全没有用户输入框**，只读地显示 AI 的 `result.output` + 一个「重新生成」按钮 → 用户连「一句话故事」都**没法自己敲**，更谈不上带着它去生成。这是本次反馈最直接的痛点。
+2. **普通字段组件 AIFieldCard**：用户**能**编辑字段值（`value`/`onChange`）、也能填一个独立的提示（`hint`）；但「AI 生成时是否把当前字段值（用户已写内容）带进 prompt」**取决于各调用方传入的 `buildMessages` 实现，不统一**——有的带、有的只带 hint 不带 value。
+3. （次要）`WorkflowRunner` 还存在裸 `renderPrompt` 不注入项目上下文（projectName/genres/worldContext/dimension）的问题，导致即使能输入，生成质量也受损——一并在本条修复。
+
+**解决方案**：
+- **工作流（首要）**：给每个步骤卡加**可编辑输入框**（用户可预先输入本步内容，如一句话故事）；点「生成」时把该输入并入 ctx（作为 userHint/seed 之一），随项目上下文一起喂给 AI；AI 产出后也允许用户**编辑输出再采纳**。
+- **通用约定**：约定所有「AI 生成」按钮在构建 prompt 时**必须带上对应字段的当前值**（用户已输入内容）作为「在此基础上改写/扩展」的种子。审计所有 `buildMessages`/生成入口，统一让其纳入当前 `value`。
+- **配套**：WorkflowRunner 同时补注入项目上下文（projectName/genres/worldContext/characterContext）+ 步骤声明 `contextVars`（含 dimension，如「一句话故事」），`dimension` 是模板 `{{变量}}` 须进 ctx。
+- **验证**：① 工作流每步可手动输入、且生成带上用户输入；② 抽查若干面板字段：先输入半句→点 AI 生成→产出是在用户输入基础上扩展而非另起。
+
+---
 
 ### Phase 40 — 「真实与幻想」多世界联动（每世界一套世界规则）
 
