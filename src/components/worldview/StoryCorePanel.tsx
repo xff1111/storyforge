@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { Sparkles } from 'lucide-react'
 import { useWorldviewStore } from '../../stores/worldview'
+import { useWorldGroupStore } from '../../stores/world-group'
 import { useAIStream } from '../../hooks/useAIStream'
 import { buildStoryGeneratePrompt } from '../../lib/ai/adapters/story-adapter'
 import AIStreamOutput from '../shared/AIStreamOutput'
@@ -37,13 +38,16 @@ interface Props { project: Project }
 
 export default function StoryCorePanel({ project }: Props) {
   const { storyCore, worldview, saveStoryCore, loadAll } = useWorldviewStore()
+  const activeGroupId = useWorldGroupStore(s => s.activeGroupId)
 
   const [values, setValues] = useState<Record<string, string>>({})
   const [activeKey, setActiveKey] = useState(FIELDS[0].key)
   // 跟踪哪些字段正在 streaming（用于侧边栏小圆点）
   const [streamingKeys, setStreamingKeys] = useState<Set<string>>(new Set())
 
-  useEffect(() => { loadAll(project.id!) }, [project.id, loadAll])
+  useEffect(() => {
+    loadAll(project.id!, project.enableMultiWorld ? activeGroupId : null)
+  }, [project.id, project.enableMultiWorld, activeGroupId, loadAll])
 
   useEffect(() => {
     if (!storyCore) return

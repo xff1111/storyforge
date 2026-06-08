@@ -40,11 +40,15 @@ const EMOTION_LABELS: Record<EmotionArc, string> = {
   climax:  '⚡ 高潮',
 }
 
+export function filterExistingIds(ids: number[], validIds: Set<number>): number[] {
+  return [...new Set(ids.filter(id => validIds.has(id)))]
+}
+
 /** v3 §2.1 — 创作区.细纲（场景拆分 + AI） */
 export default function DetailedOutlinePanel({ project }: Props) {
   const { nodes, loadAll: loadOutline } = useOutlineStore()
   const { detailedOutlines, loadAll: loadDetailed, getOrCreate, save } = useDetailedOutlineStore()
-  const { characters } = useCharacterStore()
+  const { characters, loadAll: loadCharacters } = useCharacterStore()
   const aiConfig = useAIConfigStore(s => s.config)
   const { foreshadows, loadAll: loadForeshadows } = useForeshadowStore()
   const ai = useAIStream()
@@ -56,7 +60,8 @@ export default function DetailedOutlinePanel({ project }: Props) {
     loadOutline(project.id!)
     loadDetailed(project.id!)
     loadForeshadows(project.id!)
-  }, [project.id, loadOutline, loadDetailed, loadForeshadows])
+    loadCharacters(project.id!)
+  }, [project.id, loadOutline, loadDetailed, loadForeshadows, loadCharacters])
 
   // 章节节点列表（按 order 排序）
   const chapterNodes = useMemo(() =>
@@ -67,6 +72,14 @@ export default function DetailedOutlinePanel({ project }: Props) {
   // 当前选中章节的细纲
   const currentChapter = chapterNodes.find(n => n.id === selectedNodeId)
   const currentDetailed = detailedOutlines.find(d => d.outlineNodeId === selectedNodeId)
+  const validCharacterIds = useMemo(
+    () => new Set(characters.map(c => c.id).filter((id): id is number => id != null)),
+    [characters],
+  )
+  const validForeshadowIds = useMemo(
+    () => new Set(foreshadows.map(f => f.id).filter((id): id is number => id != null)),
+    [foreshadows],
+  )
 
   const ensureDetailed = async () => {
     if (!currentChapter) return null
@@ -188,8 +201,12 @@ export default function DetailedOutlinePanel({ project }: Props) {
     if (parsed.endingCliffhanger) patch.endingCliffhanger = parsed.endingCliffhanger
     if (parsed.sceneLocation) patch.sceneLocation = parsed.sceneLocation
     if (parsed.emotionArc) patch.emotionArc = parsed.emotionArc as EmotionArc
-    if (parsed.appearingCharacterIds) patch.appearingCharacterIds = parsed.appearingCharacterIds
-    if (parsed.foreshadowIds) patch.foreshadowIds = parsed.foreshadowIds
+    if (parsed.appearingCharacterIds) {
+      patch.appearingCharacterIds = filterExistingIds(parsed.appearingCharacterIds, validCharacterIds)
+    }
+    if (parsed.foreshadowIds) {
+      patch.foreshadowIds = filterExistingIds(parsed.foreshadowIds, validForeshadowIds)
+    }
 
     // 如果 AI 返回了场景，也写入
     if (parsed.scenes && parsed.scenes.length > 0) {
@@ -197,7 +214,7 @@ export default function DetailedOutlinePanel({ project }: Props) {
         sceneId: nanoid(),
         title: s.title,
         summary: s.summary,
-        characterIds: s.characterIds || [],
+        characterIds: filterExistingIds(s.characterIds || [], validCharacterIds),
         location: s.location || '',
         conflict: s.conflict || '',
         pace: (s.pace || 'medium') as ScenePace,

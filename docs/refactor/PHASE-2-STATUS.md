@@ -13,7 +13,7 @@
 | 2.5 Batch detail/content `worldContextResolver` | Done | `refactor/phase-2-task-2.5` / this task commit | Batch chapter content generation now supports per-chapter world context resolution; batch detail already used this resolver and remains covered. |
 | 2.6 Character JSON reference remap | Done | `refactor/phase-2-task-2.6` / this task commit | Character delete/merge now rewrites registered detailed-outline array/scene JSON references and remaps character state cards by name. |
 | 2.7 Selective state extraction | Done | `refactor/phase-2-task-2.7` / this task commit | Manual and automatic state extraction now use selective state recall based on the chapter text instead of full state context. |
-| 2.8 Remaining P1 fixes | Pending | - | Close remaining P1 issues listed in `MASTER-BLUEPRINT.md`. |
+| 2.8 Remaining P1 fixes | Done | `refactor/phase-2-task-2.8` / this task commit | P1-9 through P1-16 are closed or locked: request trimming, true abort, multiworld context wiring, ID validation, portal cleanup, recursive geography delete, and export sanitization. |
 
 ## 2.1 Verification Evidence
 
@@ -123,3 +123,28 @@
 - `handleExtractState()` now passes `buildSelectiveStateContext(plainText, extraStateIds).text` into `buildStateExtractPrompt()`.
 - `handleAutoPostGenerate()` now passes `buildSelectiveStateContext(text, extraStateIds).text` into automatic state extraction.
 - R-16 locks both wiring points so `const stateCtx = buildStateContext()` cannot silently return in those extraction paths.
+
+## 2.8 Verification Evidence
+
+- `npx tsc --noEmit`: passed.
+- `npm test -- tests/regression/R-18-phase2-p1-fixes.test.ts`: 1 file / 8 tests passed.
+- `npm test`: 20 files / 57 tests passed.
+- `npm run check:required-tables`: 45 tables match `schema.ts`.
+- `npm run build`: passed; existing Vite dynamic-import/chunk-size warnings only.
+
+## 2.8 Completion Notes
+
+- P1-9: `chat()` and `streamChat()` now call `trimMessagesToFit()` before fetch so over-window payloads are truly degraded instead of only showing a UI warning.
+- P1-10: non-streaming `chat()` accepts `AbortSignal` and passes it to fetch; shared and duplicate `chatWithAbort()` helpers now call the real signal path instead of `Promise.race`.
+- P1-11: SceneVerify remains locked to one `assembleContext()` call using the active world group; R-18 asserts `historical` and `worldRules` are read from the same assembled result.
+- P1-12: `StoryCorePanel` now loads worldview context with `activeGroupId` in multiworld projects.
+- P1-13: enhanced detailed-outline adoption filters hallucinated `appearingCharacterIds`, `foreshadowIds`, and `scenes[].characterIds` before writing.
+- P1-14: world-node portal JSON parsing is safe, and deleting a node subtree removes other nodes' portals pointing into that subtree.
+- P1-15: legacy geography `locations` JSON deletion now removes the full descendant subtree.
+- P1-16: HTML and EPUB export sanitize chapter HTML to remove scripts, event handlers, and `javascript:` URLs.
+
+## Phase 2 Completion
+
+- Status: complete pending external review and main merge.
+- Final verification on `refactor/phase-2-task-2.8`: `npx tsc --noEmit`, `npm test` (20 files / 57 tests), `npm run check:required-tables`, and `npm run build` all passed.
+- Build warnings are unchanged Vite dynamic-import/chunk-size warnings.

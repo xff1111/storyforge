@@ -8,7 +8,7 @@
 |---|---|---|---|
 | Phase 0 - Emergency fixes | Done | Remove immediate data-loss and invalid-transaction risks before building new architecture. | P0.1-P0.8 all fixed, regression tests green, build green. |
 | Phase 1 - Three registries foundation | Done | Build `PROJECT_TABLES`, `FIELD_REGISTRY + AdoptionSchema`, and `CONTEXT_SOURCES + assembleContext` as single sources of truth. | Lifecycle/read/write paths use registry-derived APIs; lint and registry tests pass. |
-| Phase 2 - Multiworld and content integrity | In progress | Finish multiworld linkage, context completeness, AI current-value usage, import/world routing, and JSON reference cleanup. | Multiworld generation/import/export do not cross-contaminate; AI reads and writes the intended fields. |
+| Phase 2 - Multiworld and content integrity | Done | Finish multiworld linkage, context completeness, AI current-value usage, import/world routing, JSON reference cleanup, and remaining P1 content integrity fixes. | Complete on stacked task branches 2.1-2.8; pending external review and main merge. |
 | Phase 3 - Project polish | Pending | Add generated AI manual, CI, coverage, safety, performance, README, contributing docs, and i18n preparation. | CI green, coverage target met, generated docs match code, project is presentable as a mature open-source tool. |
 
 ## Core Architecture Work
@@ -59,7 +59,7 @@
 | 2.5 Batch detail/content `worldContextResolver` | Done | `refactor/phase-2-task-2.5` / this task commit | Batch chapter content now supports per-chapter world context resolver; R-14 verifies prompt routing. |
 | 2.6 Character JSON reference remap | Done | `refactor/phase-2-task-2.6` / this task commit | Shared character-reference remap now removes/replaces detailed-outline character arrays, scene JSON character ids, relations, and character state cards; R-15 covers delete and merge. |
 | 2.7 Selective state extraction | Done | `refactor/phase-2-task-2.7` / this task commit | Manual and automatic state extraction now use selective recall from chapter text; R-16 locks the wiring. |
-| 2.8 Remaining P1 fixes | Pending | - | Close remaining P1 items listed in `MASTER-BLUEPRINT.md`. |
+| 2.8 Remaining P1 fixes | Done | `refactor/phase-2-task-2.8` / this task commit | Closed P1-9 through P1-16: true request trim, real abort signal, multiworld context locks, ID filtering, portal cleanup, recursive geography delete, and export sanitization; R-18 covers 8 checks. |
 
 ## Execution Notes
 
@@ -67,3 +67,4 @@
 - Do not merge stacked branches into `main` before review.
 - Each task still needs isolated verification evidence and a dedicated commit.
 - Existing unrelated dirty docs are not part of task commits unless explicitly staged for that task.
+- Phase 2 final local verification on `refactor/phase-2-task-2.8`: `npx tsc --noEmit`, `npm test` (20 files / 57 tests), `npm run check:required-tables`, and `npm run build` passed.
