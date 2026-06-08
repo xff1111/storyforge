@@ -11,7 +11,7 @@
 | 2.3 `AIFieldCard` current value injection | Done | `refactor/phase-2-task-2.3` / this task commit | Single-field AI generation now has expand/rewrite/polish modes; expand/polish include current value, rewrite ignores current value. |
 | 2.4 `chunk-writer` target `worldGroupId` | Done | `refactor/phase-2-task-2.4` / this task commit | Import sessions record a target world, the confirm modal lets multiworld users choose it, and chunk writes stamp worldview/characters/outline to that world. |
 | 2.5 Batch detail/content `worldContextResolver` | Done | `refactor/phase-2-task-2.5` / this task commit | Batch chapter content generation now supports per-chapter world context resolution; batch detail already used this resolver and remains covered. |
-| 2.6 Character JSON reference remap | Pending | - | Character delete/merge should remove or rewrite JSON-array references. |
+| 2.6 Character JSON reference remap | Done | `refactor/phase-2-task-2.6` / this task commit | Character delete/merge now rewrites registered detailed-outline array/scene JSON references and remaps character state cards by name. |
 | 2.7 Selective state extraction | Pending | - | State extraction should use selective state recall instead of full state context. |
 | 2.8 Remaining P1 fixes | Pending | - | Close remaining P1 issues listed in `MASTER-BLUEPRINT.md`. |
 
@@ -93,3 +93,19 @@
 - `BatchChapterOptions` now accepts `worldContextResolver?(chapterNodeId)`.
 - `batchGenerateChapters` resolves `chWorldContext` per chapter before building `chapter.content` messages.
 - R-14 mocks `chat()` and verifies each generated prompt uses the resolver context instead of the fallback context.
+
+## 2.6 Verification Evidence
+
+- `npx tsc --noEmit`: passed.
+- `npm test -- tests/regression/R-15-character-reference-remap.test.ts`: 1 file / 2 tests passed.
+- `npm test`: 18 files / 47 tests passed.
+- `npm run check:required-tables`: 45 tables match `schema.ts`.
+- `npm run build`: passed; existing Vite dynamic-import/chunk-size warnings only.
+
+## 2.6 Completion Notes
+
+- Added `applyCharacterReferenceRemap()` as the shared role-reference cleanup/remap entry.
+- The helper derives detailed-outline array and scene JSON updates from `PROJECT_TABLES` refs targeting `characters`.
+- Manual `deleteCharacter()` now runs character deletion, relation cleanup, detailed-outline cleanup, and character state-card deletion in one transaction.
+- Import character merge now remaps duplicate-character references to the primary character and merges duplicate character state cards by `entityName`.
+- R-15 covers both delete and merge paths for `appearingCharacterIds`, `scenes[].characterIds`, `characterRelations`, and character `stateCards`.

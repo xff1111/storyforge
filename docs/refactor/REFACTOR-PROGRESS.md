@@ -57,7 +57,7 @@
 | 2.3 `AIFieldCard` current value injection | Done | `refactor/phase-2-task-2.3` / this task commit | Added expand/rewrite/polish mode plumbing for single-field AI; current value is included by default and omitted for rewrite mode. |
 | 2.4 `chunk-writer` target `worldGroupId` | Done | `refactor/phase-2-task-2.4` / this task commit | Import sessions and chunk writes now route project-imported worldview/characters/outline data to the selected target world; R-13 covers cross-world same-name isolation. |
 | 2.5 Batch detail/content `worldContextResolver` | Done | `refactor/phase-2-task-2.5` / this task commit | Batch chapter content now supports per-chapter world context resolver; R-14 verifies prompt routing. |
-| 2.6 Character JSON reference remap | Pending | - | Remove/replace JSON-array role references on character delete/merge. |
+| 2.6 Character JSON reference remap | Done | `refactor/phase-2-task-2.6` / this task commit | Shared character-reference remap now removes/replaces detailed-outline character arrays, scene JSON character ids, relations, and character state cards; R-15 covers delete and merge. |
 | 2.7 Selective state extraction | Pending | - | Replace full state context in extraction with selective state recall. |
 | 2.8 Remaining P1 fixes | Pending | - | Close remaining P1 items listed in `MASTER-BLUEPRINT.md`. |
 
