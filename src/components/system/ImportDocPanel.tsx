@@ -12,6 +12,7 @@ import {
 } from '../../lib/import/pipeline'
 import { useImportSessionStore } from '../../stores/import-session'
 import { useImportStatusStore } from '../../stores/import-status'
+import { useWorldGroupStore } from '../../stores/world-group'
 import ImportConfirmModal from './import/ImportConfirmModal'
 import ImportReportModal from './import/ImportReportModal'
 import ImportStatusBar from './import/ImportStatusBar'
@@ -21,8 +22,13 @@ import ImportUnfinishedBanner from './import/ImportUnfinishedBanner'
 import ImportUploadZone from './import/ImportUploadZone'
 import type { Project } from '../../lib/types'
 import type { ImportSession, ChunkState, ImportTarget } from '../../lib/types/import-session'
+import type { SidebarModule } from '../layout/Sidebar'
 
-interface Props { project: Project }
+interface Props {
+  project: Project
+  /** 解析完成后「前往查看」用:跳到导入落点(当前项目=设定库 / 项目参考页)。 */
+  onNavigate?: (module: SidebarModule) => void
+}
 
 const DEFAULT_CHUNK_SIZE = 50000
 
@@ -37,7 +43,7 @@ const DEFAULT_CHUNK_SIZE = 50000
  *   · 打开面板发现未完成任务时，自动从 Blob 恢复原文 → 直接续跑，不再需要重传文件
  *   · 调 navigator.storage.persist() 防止浏览器 GC 掉 Blob
  */
-export default function ImportDocPanel({ project }: Props) {
+export default function ImportDocPanel({ project, onNavigate }: Props) {
   const [filename, setFilename] = useState('')
   const [rawText, setRawText] = useState('')
   const [fileError, setFileError] = useState<string | null>(null)
@@ -49,6 +55,7 @@ export default function ImportDocPanel({ project }: Props) {
   const [chunkSize, setChunkSize] = useState(DEFAULT_CHUNK_SIZE)
   const [showConfirm, setShowConfirm] = useState(false)
   const [volumeDetect, setVolumeDetect] = useState<VolumeDetectResult | null>(null)
+  const [targetWorldGroupId, setTargetWorldGroupId] = useState<number | null>(null)
 
   // 报告 modal + 未完成会话
   const [reportSession, setReportSession] = useState<ImportSession | null>(null)
@@ -58,9 +65,33 @@ export default function ImportDocPanel({ project }: Props) {
   const [restoringBlob, setRestoringBlob] = useState(false)
 
   const status = useImportStatusStore()
+  const {
+    groups: allWorldGroups,
+    activeGroupId,
+    loadAll: loadWorldGroups,
+  } = useWorldGroupStore()
   const phase = status.phase
   const isRunning = phase === 'running' || phase === 'merging' || phase === 'preparing'
   const isPaused = phase === 'paused'
+  const worldGroups = useMemo(
+    () => allWorldGroups.filter(group => group.projectId === project.id),
+    [allWorldGroups, project.id],
+  )
+
+  useEffect(() => {
+    if (!project.enableMultiWorld) {
+      setTargetWorldGroupId(null)
+      return
+    }
+    loadWorldGroups(project.id!)
+  }, [project.enableMultiWorld, project.id, loadWorldGroups])
+
+  useEffect(() => {
+    if (!project.enableMultiWorld) return
+    if (targetWorldGroupId != null && worldGroups.some(group => group.id === targetWorldGroupId)) return
+    const activeBelongsToProject = worldGroups.some(group => group.id === activeGroupId)
+    setTargetWorldGroupId(activeBelongsToProject ? activeGroupId : worldGroups[0]?.id ?? null)
+  }, [activeGroupId, project.enableMultiWorld, targetWorldGroupId, worldGroups])
 
   // ── 启动时：申请持久存储权限（一次性，浏览器会记住） ─────
   useEffect(() => {
@@ -196,8 +227,12 @@ export default function ImportDocPanel({ project }: Props) {
   }
 
   // ── 在 Confirm Modal 里确认：创建 session 并启动 ───────────
-  const handleConfirmStart = async (importTarget: ImportTarget) => {
+  const handleConfirmStart = async (importTarget: ImportTarget, selectedWorldGroupId?: number | null) => {
     if (!plans) return
+    if (importTarget === 'project' && project.enableMultiWorld && selectedWorldGroupId == null) {
+      alert('请先选择本次导入要写入的目标世界。')
+      return
+    }
     setShowConfirm(false)
 
     useImportStatusStore.getState().reset()
@@ -223,6 +258,7 @@ export default function ImportDocPanel({ project }: Props) {
       merged: { worldview: {}, characters: [], outline: [] },
       rollingContext: '',
       importTarget,
+      targetWorldGroupId: importTarget === 'project' ? (selectedWorldGroupId ?? null) : null,
       status: 'pending',
     }
 
@@ -257,6 +293,7 @@ export default function ImportDocPanel({ project }: Props) {
             projectId: project.id!,
             parentId: null,
             type: 'volume',
+            worldGroupId: selectedWorldGroupId ?? null,
             title: vol.title,
             summary: '',
             order: startOrder + vi,
@@ -410,7 +447,8 @@ export default function ImportDocPanel({ project }: Props) {
         <p className="text-sm text-text-muted">
           上传任意一份文档（设定集、成品小说、大纲草稿……甚至千万字长篇），AI 自动分块串行解析
           <span className="text-accent">世界观 / 角色 / 大纲章节</span>。
-          解析完成后可选择<strong>导入当前项目</strong>或<strong>导入项目参考</strong>。
+          开始解析前先选择写入<strong>当前项目</strong>还是<strong>项目参考</strong>；解析过程中即<strong>实时入库</strong>，
+          完成后数据已就位，无需再手动导入。
         </p>
         <div className="mt-2 bg-bg-surface border border-border rounded-lg p-3 text-xs text-text-secondary">
           <div className="flex items-center gap-1.5 mb-1.5 text-text-primary">
@@ -542,6 +580,9 @@ export default function ImportDocPanel({ project }: Props) {
           chunks={plans}
           chunkSize={chunkSize}
           volumeDetect={volumeDetect}
+          worldGroups={project.enableMultiWorld ? worldGroups : []}
+          targetWorldGroupId={targetWorldGroupId}
+          onTargetWorldGroupChange={setTargetWorldGroupId}
           onChunkSizeChange={handleChunkSizeChange}
           onConfirm={handleConfirmStart}
           onCancel={() => setShowConfirm(false)}
@@ -555,6 +596,11 @@ export default function ImportDocPanel({ project }: Props) {
           onRetryFailed={handleRetryFailed}
           onClose={handleCloseReport}
           onDiscard={handleDiscardSession}
+          onNavigate={onNavigate && (() => {
+            // 当前项目 → 跳设定库(世界观起源);项目参考 → 跳项目参考页
+            onNavigate(reportSession.importTarget === 'reference' ? 'references' : 'worldview-origin')
+            handleCloseReport()
+          })}
         />
       )}
     </div>

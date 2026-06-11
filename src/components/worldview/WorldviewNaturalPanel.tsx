@@ -3,13 +3,20 @@ import { Sparkles } from 'lucide-react'
 import { useWorldviewStore } from '../../stores/worldview'
 import { useWorldGroupStore } from '../../stores/world-group'
 import WorldGroupSwitcher from '../world-group/WorldGroupSwitcher'
+import CodexPanel from '../codex/CodexPanel'
 import { InlineTextarea } from '../shared/InlineEdit'
 import { useAIStream } from '../../hooks/useAIStream'
 import { buildWorldviewPrompt } from '../../lib/ai/adapters/worldview-adapter'
-import { buildWorldRulesContext } from '../../lib/ai/world-rules-manifest'
+import { assembleContext } from '../../lib/registry/assemble-context'
 import AIStreamOutput from '../shared/AIStreamOutput'
 import PromptRunPanel from '../shared/PromptRunPanel'
+import AIFieldModeTabs from '../shared/AIFieldModeTabs'
 import type { Project, NaturalResources } from '../../lib/types'
+import type { FieldGenerationMode } from '../../lib/ai/field-generation-context'
+
+async function buildRulesSourceContext(projectId: number, worldGroupId: number | null): Promise<string> {
+  return (await assembleContext({ projectId, worldGroupId, sourceKeys: ['worldRules'] })).text
+}
 
 interface Props { project: Project }
 
@@ -149,12 +156,24 @@ export default function WorldviewNaturalPanel({ project }: Props) {
               />
             </div>
           ))}
-          <div className={activeKey === 'naturalResources' ? '' : 'hidden'}>
-            <NaturalResourcesEditor
-              naturalResources={naturalResources}
-              setNaturalResources={setNaturalResources}
-              save={save}
-            />
+          <div className={activeKey === 'naturalResources' ? 'space-y-4' : 'hidden'}>
+            {/* B3:自然物产词条化(矿物/草药/异兽)——嵌入式词条,主入口在此 */}
+            <div>
+              <h3 className="text-sm font-semibold text-text-primary mb-1">📚 自然物产(词条)</h3>
+              <p className="text-xs text-text-muted mb-2">矿物灵材 / 灵植草药 / 灵兽异兽——结构化词条,可自定义字段、互相关联,并进入 AI 生成上下文。</p>
+              <CodexPanel project={project} fixedDomain="natural" embedded />
+            </div>
+            {/* 旧版自然资源(纯文本)——保留兼容,后续可一键转词条 */}
+            <details className="border-t border-border/60 pt-3">
+              <summary className="text-xs text-text-muted cursor-pointer hover:text-text-secondary">旧版「自然资源」纯文本(兼容保留,可继续编辑)</summary>
+              <div className="mt-2">
+                <NaturalResourcesEditor
+                  naturalResources={naturalResources}
+                  setNaturalResources={setNaturalResources}
+                  save={save}
+                />
+              </div>
+            </details>
           </div>
         </div>
       </div>
@@ -176,14 +195,16 @@ function SimpleFieldEditor({ field, value, onChange, project, contextSummary, on
   const [parameterValues, setParameterValues] = useState<Record<string, unknown>>({})
   const [systemOverride, setSystemOverride] = useState<string | null>(null)
   const [userOverride, setUserOverride] = useState<string | null>(null)
+  const [mode, setMode] = useState<FieldGenerationMode>('expand')
   const ai = useAIStream()
+  const activeGroupId = useWorldGroupStore(s => s.activeGroupId)
 
   useEffect(() => {
     onStreamingChange(ai.isStreaming)
   }, [ai.isStreaming, onStreamingChange])
 
   const handleGenerate = async () => {
-    const rulesCtx = await buildWorldRulesContext(project.id!)
+    const rulesCtx = await buildRulesSourceContext(project.id!, project.enableMultiWorld ? activeGroupId : null)
     const opts = {
       parameterValues: {
         ...parameterValues,
@@ -195,7 +216,7 @@ function SimpleFieldEditor({ field, value, onChange, project, contextSummary, on
       } : undefined,
     }
     const messages = buildWorldviewPrompt(
-      field.label, project.name, project.genre || '', contextSummary, hint, opts,
+      field.label, project.name, project.genre || '', contextSummary, hint, opts, value, mode,
     )
     ai.start(messages)
   }
@@ -217,6 +238,7 @@ function SimpleFieldEditor({ field, value, onChange, project, contextSummary, on
       </div>
 
       <div className="flex items-center gap-2">
+        <AIFieldModeTabs value={mode} onChange={setMode} />
         <input value={hint} onChange={e => setHint(e.target.value)}
           placeholder="给 AI 的补充说明（可选）"
           className="flex-1 px-2 py-1.5 bg-bg-base border border-border rounded text-xs text-text-primary focus:outline-none focus:border-accent" />

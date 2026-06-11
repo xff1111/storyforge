@@ -6,11 +6,18 @@ import WorldGroupSwitcher from '../world-group/WorldGroupSwitcher'
 import { InlineTextarea } from '../shared/InlineEdit'
 import { useAIStream } from '../../hooks/useAIStream'
 import { buildWorldviewPrompt } from '../../lib/ai/adapters/worldview-adapter'
-import { buildWorldRulesContext } from '../../lib/ai/world-rules-manifest'
+import { assembleContext } from '../../lib/registry/assemble-context'
 import AIStreamOutput from '../shared/AIStreamOutput'
 import PromptRunPanel from '../shared/PromptRunPanel'
+import AIFieldModeTabs from '../shared/AIFieldModeTabs'
 import type { Project } from '../../lib/types'
+import type { FieldGenerationMode } from '../../lib/ai/field-generation-context'
+
+async function buildRulesSourceContext(projectId: number, worldGroupId: number | null): Promise<string> {
+  return (await assembleContext({ projectId, worldGroupId, sourceKeys: ['worldRules'] })).text
+}
 import CurrencyPanel from './CurrencyPanel'
+import CodexPanel from '../codex/CodexPanel'
 
 // ── 字段定义（统一标签，兼容幻想与历史） ─────────────────────────
 
@@ -31,7 +38,7 @@ const FIELDS: FieldMeta[] = [
   { key: 'factions',  field: 'factionLayout',          emoji: '⚔',  label: '势力分布',       description: '主要势力（门派 / 朝廷 / 商会 / 党派……）的格局和敌友关系' },
   { key: 'pec',       field: 'politicsEconomyCulture', emoji: '🏛', label: '政治/经济/文化', description: '政体 / 货币 / 赋税 / 阶层制度 / 宗教信仰 / 风俗节庆' },
   { key: 'conflicts', field: 'internalConflicts',      emoji: '🔥', label: '矛盾冲突',       description: '社会内在矛盾 / 阶级冲突 / 个体与集体冲突 / 与外部世界的张力' },
-  { key: 'items',     field: 'itemDesign',             emoji: '🗡', label: '道具与器物',     description: '武器 / 法器 / 工具 / 科技装备……物品的来源、品级、规则', hint: '这里写物品体系概述；具体道具条目请到「💎 道具系统」管理，主角随身物品由「🎒 物品栏」自动追踪。' },
+  { key: 'items',     field: 'itemDesign',             emoji: '🗡', label: '道具与器物',     description: '武器 / 法器 / 工具 / 科技装备……物品的来源、品级、规则', hint: '这里写物品体系概述；具体道具条目请到本面板「📚 人文主体·人工器物」词条逐条管理，主角随身物品由「🎒 物品栏」自动追踪。' },
 ]
 
 // ── 主面板 ─────────────────────────────────────────────────────
@@ -141,6 +148,14 @@ export default function WorldviewHumanityPanel({ project }: Props) {
         <div className="flex-1 min-w-0 overflow-y-auto p-6">
           {FIELDS.map(f => (
             <div key={f.key} className={activeKey === f.key ? '' : 'hidden'}>
+              {/* B4: 人文主体词条(种族/势力/城池/器物)——结构化登记,可自定义字段、互相关联、进 AI 上下文 */}
+              {f.key === 'races' && (
+                <div className="mb-6">
+                  <h3 className="text-sm font-semibold text-text-primary mb-1">📚 人文主体(词条):种族 / 势力 / 城池重镇 / 人工器物</h3>
+                  <p className="text-xs text-text-muted mb-3">结构化登记人文设定——可自定义专属字段、互相关联，并进入 AI 生成上下文。下方旧版「种族与民族」纯文本兼容保留。</p>
+                  <CodexPanel project={project} fixedDomain="humanity" embedded />
+                </div>
+              )}
               <HumanityFieldEditor
                 meta={f}
                 value={values[f.key] || ''}
@@ -182,14 +197,16 @@ function HumanityFieldEditor({
   const [parameterValues, setParameterValues] = useState<Record<string, unknown>>({})
   const [systemOverride, setSystemOverride] = useState<string | null>(null)
   const [userOverride, setUserOverride] = useState<string | null>(null)
+  const [mode, setMode] = useState<FieldGenerationMode>('expand')
   const ai = useAIStream()
+  const activeGroupId = useWorldGroupStore(s => s.activeGroupId)
 
   useEffect(() => {
     onStreamingChange(ai.isStreaming)
   }, [ai.isStreaming, onStreamingChange])
 
   const handleGenerate = async () => {
-    const rulesCtx = await buildWorldRulesContext(project.id!)
+    const rulesCtx = await buildRulesSourceContext(project.id!, project.enableMultiWorld ? activeGroupId : null)
     const opts = {
       parameterValues: {
         ...parameterValues,
@@ -201,7 +218,7 @@ function HumanityFieldEditor({
       } : undefined,
     }
     const messages = buildWorldviewPrompt(
-      meta.label, project.name, project.genre || '', contextSummary, hint, opts,
+      meta.label, project.name, project.genre || '', contextSummary, hint, opts, value, mode,
     )
     ai.start(messages)
   }
@@ -223,6 +240,7 @@ function HumanityFieldEditor({
       </div>
 
       <div className="flex items-center gap-2">
+        <AIFieldModeTabs value={mode} onChange={setMode} />
         <input
           value={hint} onChange={e => setHint(e.target.value)}
           placeholder="给 AI 的补充说明（可选）"

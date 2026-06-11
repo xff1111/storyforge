@@ -1,10 +1,13 @@
 import { create } from 'zustand'
 import { db } from '../lib/db/schema'
-import type { Character, Faction } from '../lib/types'
+import type { Character } from '../lib/types'
+import { applyCharacterReferenceRemap } from '../lib/registry/character-references'
+
+// 注:势力(Faction)已于 C2 并入「势力」词条,旧 factions 表数据由
+// migrations/faction-to-codex 一次性迁移;本 store 不再管理势力。
 
 interface CharacterStore {
   characters: Character[]
-  factions: Faction[]
   loading: boolean
 
   loadAll: (projectId: number) => Promise<void>
@@ -12,26 +15,18 @@ interface CharacterStore {
   addCharacter: (char: Omit<Character, 'id' | 'createdAt' | 'updatedAt'>) => Promise<number>
   updateCharacter: (id: number, data: Partial<Character>) => Promise<void>
   deleteCharacter: (id: number) => Promise<void>
-
-  addFaction: (faction: Omit<Faction, 'id' | 'createdAt' | 'updatedAt'>) => Promise<number>
-  updateFaction: (id: number, data: Partial<Faction>) => Promise<void>
-  deleteFaction: (id: number) => Promise<void>
 }
 
 const now = () => Date.now()
 
 export const useCharacterStore = create<CharacterStore>((set, get) => ({
   characters: [],
-  factions: [],
   loading: false,
 
   loadAll: async (projectId: number) => {
     set({ loading: true })
-    const [characters, factions] = await Promise.all([
-      db.characters.where('projectId').equals(projectId).toArray(),
-      db.factions.where('projectId').equals(projectId).toArray(),
-    ])
-    set({ characters, factions, loading: false })
+    const characters = await db.characters.where('projectId').equals(projectId).toArray()
+    set({ characters, loading: false })
   },
 
   addCharacter: async (char) => {
@@ -51,33 +46,16 @@ export const useCharacterStore = create<CharacterStore>((set, get) => ({
   },
 
   deleteCharacter: async (id) => {
-    await db.characters.delete(id)
-    // 清理引用该角色的关系，否则留下悬空关系（关系网会显示「角色#id」断链）
-    const fromKeys = (await db.characterRelations.where('fromCharacterId').equals(id).primaryKeys()) as number[]
-    const toKeys = (await db.characterRelations.where('toCharacterId').equals(id).primaryKeys()) as number[]
-    const relKeys = [...new Set([...fromKeys, ...toKeys])]
-    if (relKeys.length) await db.characterRelations.bulkDelete(relKeys)
-    set({ characters: get().characters.filter(c => c.id !== id) })
-  },
-
-  addFaction: async (faction) => {
-    const newFaction: Faction = { ...faction, createdAt: now(), updatedAt: now() }
-    const id = await db.factions.add(newFaction) as number
-    set({ factions: [...get().factions, { ...newFaction, id }] })
-    return id
-  },
-
-  updateFaction: async (id, data) => {
-    await db.factions.update(id, { ...data, updatedAt: now() })
-    set({
-      factions: get().factions.map(f =>
-        f.id === id ? { ...f, ...data, updatedAt: now() } : f
-      ),
+    await db.transaction('rw', db.characters, db.characterRelations, db.detailedOutlines, db.stateCards, async () => {
+      const char = await db.characters.get(id)
+      if (!char) return
+      await db.characters.delete(id)
+      await applyCharacterReferenceRemap({
+        projectId: char.projectId,
+        fromCharacterId: id,
+        fromName: char.name,
+      })
     })
-  },
-
-  deleteFaction: async (id) => {
-    await db.factions.delete(id)
-    set({ factions: get().factions.filter(f => f.id !== id) })
+    set({ characters: get().characters.filter(c => c.id !== id) })
   },
 }))
