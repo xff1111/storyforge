@@ -37,6 +37,7 @@ import type {
   HistoricalKeyword,
   ImportantLocation,
   WorldRulesProfile,
+  UserStyleProfile,
   WorldGroup,
   WorldGroupLink,
   ItemLedgerEntry,
@@ -119,6 +120,9 @@ class StoryForgeDB extends Dexie {
   // Phase 35-a —— 词条系统（Codex）
   codexCategories!: Table<CodexCategory, number>
   codexEntries!: Table<CodexEntry, number>
+
+  // FB-5 —— 自适应文风学习（每项目一份 AI 文风画像）
+  userStyleProfiles!: Table<UserStyleProfile, number>
 
   // AI 消耗统计
   aiUsageLog!: Table<AIUsageEntry, number>
@@ -293,6 +297,27 @@ class StoryForgeDB extends Dexie {
       factions: null,
     }).upgrade(async (tx) => {
       await migrateLegacyTablesToCodex(tx)
+    })
+
+    // v30: 自适应文风学习（FB-5）—— 纯新增空表,无存量数据,无需迁移函数。
+    this.version(30).stores({
+      userStyleProfiles: '++id, projectId',
+    })
+
+    // v31: 作品分析统一为 13 维（旧 8 维字段名不同 → 弃旧重跑）。
+    //   字段非索引,stores() 不变。升级钩子只清 referenceChunkAnalysis 的旧分析行 +
+    //   把受影响 reference 的 analysisStatus 复位为 none,让用户重新跑统一分析。
+    //   **绝不碰 importSessions / importFiles**（解析缓存跨更新存活）。
+    this.version(31).stores({
+      referenceChunkAnalysis: '++id, referenceId, chunkIndex',
+    }).upgrade(async (tx) => {
+      await tx.table('referenceChunkAnalysis').clear()
+      await tx.table('references').toCollection().modify((r: { analysisStatus?: string; analysisProgress?: number }) => {
+        if (r.analysisStatus && r.analysisStatus !== 'none') {
+          r.analysisStatus = 'none'
+          r.analysisProgress = 0
+        }
+      })
     })
   }
 }
