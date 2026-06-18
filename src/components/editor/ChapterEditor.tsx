@@ -8,6 +8,7 @@ import { CInput } from '../shared/CompositionInput'
 import { useAutoSave } from '../../hooks/useAutoSave'
 import { useBeforeUnload } from '../../hooks/useBeforeUnload'
 import { buildChapterContentPrompt, buildContinuePrompt, buildPolishPrompt, buildExpandPrompt, buildDeAIPrompt } from '../../lib/ai/adapters/chapter-adapter'
+import { buildReviewRevisePrompt, type ReviewResult } from '../../lib/ai/adapters/review-adapter'
 import { buildStateExtractPrompt, parseStateDiffs } from '../../lib/ai/adapters/state-extract-adapter'
 import { buildSummaryPrompt } from '../../lib/ai/adapters/summary-adapter'
 import { buildGenreConstraintContext } from '../../lib/ai/genre-metadata'
@@ -19,6 +20,7 @@ import { useForeshadowStore } from '../../stores/foreshadow'
 import { htmlToPlainText, plainTextToHtml, countWords } from '../../lib/utils/html'
 import AIStreamOutput from '../shared/AIStreamOutput'
 import ContextBudgetBar from '../shared/ContextBudgetBar'
+import { useDialog } from '../shared/Dialog'
 import { useAIConfigStore } from '../../stores/ai-config'
 import { analyzeContextSegments, calculateBudget, type ContextBudget } from '../../lib/ai/context-budget'
 import StateDiffModal from '../state/StateDiffModal'
@@ -62,6 +64,7 @@ export default function ChapterEditor({ project, outlineNodeId }: Props) {
   const stateAI = useAIStream()
   const summaryAI = useAIStream()
   const editorRef = useRef<RichEditorHandle>(null)
+  const reviseReportRef = useRef<ReviewResult | null>(null)  // G8：记住上次"按报告修改"的报告，供重试
   // Phase A1: 自动流程标记
   const [autoProcessing, setAutoProcessing] = useState<'idle' | 'extracting' | 'summarizing'>('idle')
   const [showOutlinePreview, setShowOutlinePreview] = useState(false)
@@ -69,6 +72,7 @@ export default function ChapterEditor({ project, outlineNodeId }: Props) {
   const [showNotePanel, setShowNotePanel] = useState(false)
   const [contextBudget, setContextBudget] = useState<ContextBudget | null>(null)
   const aiConfig = useAIConfigStore(s => s.config)
+  const dialog = useDialog()
 
   // 字数（基于纯文本）
   const wordCount = useMemo(() => countWords(plainText), [plainText])
@@ -300,12 +304,39 @@ export default function ChapterEditor({ project, outlineNodeId }: Props) {
     ai.start(messages, undefined, { category: 'chapter.expand', projectId: project.id! })
   }
 
-  const handleDeAI = () => {
-    const selected = editorRef.current?.getSelectedText() || plainText.slice(-1000)
-    if (!selected) return
-    const messages = buildDeAIPrompt(selected)
-    setAIAction('deai')
+  const handleDeAI = async () => {
+    // 有选区只去味选区；没选区则对【整章正文】去味（不再只取末尾 1000 字 → 修字数缩水 bug G4）
+    const selected = editorRef.current?.getSelectedText()
+    const isFull = !selected
+    const target = (selected || plainText).trim()
+    if (!target) return
+    // G1：点击先确认，避免误触烧 token
+    const ok = await dialog.confirm({
+      title: '去 AI 味改写？',
+      message: isFull
+        ? `将对整章正文（约 ${countWords(target)} 字）做去 AI 味改写，篇幅与原文保持相近。改写结果会先预览，确认后才替换原文。`
+        : '将对选中的文字做去 AI 味改写。改写结果会先预览，确认后才替换。',
+      confirmText: '开始改写',
+    })
+    if (!ok) return
+    const messages = buildDeAIPrompt(target)
+    setAIAction(isFull ? 'deai-full' : 'deai')
     ai.start(messages, undefined, { category: 'chapter.deai', projectId: project.id! })
+  }
+
+  // G8：按审校报告让 AI 改全文 —— 走和「生成正文」相同的预览→采纳/关闭流程
+  const handleReviseByReport = async (report: ReviewResult) => {
+    if (!plainText.trim()) return
+    const ok = await dialog.confirm({
+      title: '按审校报告让 AI 改全文？',
+      message: `将依据本章审校报告修改整章正文（约 ${countWords(plainText)} 字），篇幅与原文保持相近。改写结果会先预览，确认后才替换原文。`,
+      confirmText: '开始修改',
+    })
+    if (!ok) return
+    reviseReportRef.current = report
+    const messages = buildReviewRevisePrompt(plainText, report, worldCtx, charCtx)
+    setAIAction('revise-full')
+    ai.start(messages, undefined, { category: 'review.revise', projectId: project.id! })
   }
 
   // ── 状态提取 ──
@@ -393,19 +424,23 @@ export default function ChapterEditor({ project, outlineNodeId }: Props) {
 
   const handleAcceptAI = (text: string) => {
     if (!editorRef.current) return
-    const html = plainTextToHtml(text)
+    // G6：去掉段落之间的多余空行——丢弃纯空行，每个非空行成一段，段间距交给 CSS（不要空段落）
+    const normalizeProse = (t: string) =>
+      t.split(/\r?\n/).map(l => l.trimEnd()).filter(l => l.trim().length > 0).join('\n')
+    const html = plainTextToHtml(normalizeProse(text))
     const shouldAutoProcess = aiAction === 'generate' || aiAction === 'continue'
 
     if (aiAction === 'continue') {
       editorRef.current.appendContent(html)
-    } else if (aiAction === 'generate') {
+    } else if (aiAction === 'generate' || aiAction === 'deai-full' || aiAction === 'revise-full') {
+      // generate / 整章去AI味 / 按报告修改：替换全文
       editorRef.current.setContent(html)
       // setContent 不触发 onChange，这里手动同步
       const newHtml = editorRef.current.getHTML()
       setContent(newHtml)
       setPlainText(editorRef.current.getPlainText())
     } else {
-      // polish/expand/deai：替换选区（若无选区则插入在光标处）
+      // polish/expand/deai（选区）：替换选区（若无选区则插入在光标处）
       editorRef.current.replaceSelection(html)
     }
     ai.reset()
@@ -636,6 +671,7 @@ export default function ChapterEditor({ project, outlineNodeId }: Props) {
             foreshadowContext={currentChapter?.id ? buildForeshadowContext(currentChapter.id) : ''}
             stateContext={stateCards.slice(0, 10).map(sc => `${sc.category}:${sc.entityName} — ${sc.fields?.slice(0, 50)}`).join('\n')}
             onClose={() => setShowReviewPanel(false)}
+            onReviseByReport={handleReviseByReport}
           />
         </div>
       )}
@@ -674,9 +710,13 @@ export default function ChapterEditor({ project, outlineNodeId }: Props) {
       {(ai.output || ai.isStreaming || ai.error) && (
         <div className="mb-3">
           <AIStreamOutput output={ai.output} isStreaming={ai.isStreaming} error={ai.error} tokenUsage={ai.tokenUsage}
-            onStop={ai.stop} onAccept={handleAcceptAI} onRetry={() => {
+            onStop={ai.stop} onAccept={handleAcceptAI}
+            onDismiss={() => { ai.reset(); setAIAction('') }}
+            onRetry={() => {
               if (aiAction === 'generate') handleGenerate()
               else if (aiAction === 'continue') handleContinue()
+              else if (aiAction === 'deai' || aiAction === 'deai-full') handleDeAI()
+              else if (aiAction === 'revise-full' && reviseReportRef.current) handleReviseByReport(reviseReportRef.current)
             }} />
         </div>
       )}

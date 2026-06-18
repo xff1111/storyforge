@@ -3,7 +3,7 @@
  *
  * 集成三套质量检测：审校(F1)、去AI味(F2)、追读力(F3)
  */
-import { X, ShieldCheck, Bot, TrendingUp, Loader2, AlertTriangle, AlertCircle, Info } from 'lucide-react'
+import { X, ShieldCheck, Bot, TrendingUp, Loader2, AlertTriangle, AlertCircle, Info, Wand2 } from 'lucide-react'
 import { useAIStream } from '../../hooks/useAIStream'
 import { useReviewResultStore, selectChapterReview, type ReviewTab } from '../../stores/review-result'
 import { buildReviewPrompt, parseReviewResult, REVIEW_DIMENSION_LABELS, type ReviewResult } from '../../lib/ai/adapters/review-adapter'
@@ -22,6 +22,8 @@ interface Props {
   foreshadowContext: string
   stateContext: string
   onClose: () => void
+  /** G8：按审校报告让 AI 改全文（交给 ChapterEditor 走标准生成→采纳流程） */
+  onReviseByReport?: (report: ReviewResult) => void
 }
 
 type TabType = ReviewTab
@@ -34,7 +36,7 @@ const TABS: { key: TabType; label: string; icon: typeof ShieldCheck }[] = [
 
 export default function ReviewPanel(props: Props) {
   const { chapterId, chapterContent, chapterTitle, worldContext, characterContext,
-    prevChapterSummary, nextChapterSummary, foreshadowContext, stateContext, onClose } = props
+    prevChapterSummary, nextChapterSummary, foreshadowContext, stateContext, onClose, onReviseByReport } = props
 
   const ai = useAIStream()
 
@@ -103,6 +105,18 @@ export default function ReviewPanel(props: Props) {
           ))}
         </div>
         <div className="flex items-center gap-2">
+          {/* G8：审校出报告后，一键让 AI 按报告改全文（改稿在下方生成区预览，确认才替换原文） */}
+          {activeTab === 'review' && reviewResult && onReviseByReport && (
+            <button
+              onClick={() => onReviseByReport(reviewResult)}
+              disabled={ai.isStreaming}
+              title="让 AI 按上面的审校报告修改全文，结果会先预览"
+              className="flex items-center gap-1 px-3 py-1.5 text-xs bg-emerald-500/10 text-emerald-400 rounded-md hover:bg-emerald-500/20 disabled:opacity-50 transition-colors"
+            >
+              <Wand2 className="w-3 h-3" />
+              按报告 AI 修改
+            </button>
+          )}
           <button
             onClick={handleRun}
             disabled={ai.isStreaming || !chapterContent}

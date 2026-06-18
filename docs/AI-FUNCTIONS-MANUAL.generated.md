@@ -96,18 +96,18 @@ AI 输出经 `adopt({ target, data })` 写回,只有这里登记的字段可写(
 
 ## 四、AI 调用点（消耗统计 category · 在哪触发)
 
-共 39 个 category。
+共 40 个 category。
 未分类调用: 0 个。动态 category 调用: 1 个。
 
 | category | 触发文件 |
 |---|---|
 | `ai.restructure` | `src/lib/ai/restructure.ts:52` |
-| `chapter.content` | `src/components/editor/ChapterEditor.tsx:274` |
+| `chapter.content` | `src/components/editor/ChapterEditor.tsx:278` |
 | `chapter.content.batch` | `src/lib/ai/batch-detail-runner.ts:256` |
-| `chapter.continue` | `src/components/editor/ChapterEditor.tsx:284` |
-| `chapter.deai` | `src/components/editor/ChapterEditor.tsx:308` |
-| `chapter.expand` | `src/components/editor/ChapterEditor.tsx:300` |
-| `chapter.polish` | `src/components/editor/ChapterEditor.tsx:292` |
+| `chapter.continue` | `src/components/editor/ChapterEditor.tsx:288` |
+| `chapter.deai` | `src/components/editor/ChapterEditor.tsx:324` |
+| `chapter.expand` | `src/components/editor/ChapterEditor.tsx:304` |
+| `chapter.polish` | `src/components/editor/ChapterEditor.tsx:296` |
 | `chapter.toolbar` | `src/components/editor/FloatingToolbar.tsx:105` |
 | `character.generate` | `src/components/character/CharacterPanel.tsx:132` |
 | `character.structure` | `src/lib/ai/parse-character-output.ts:92` |
@@ -126,9 +126,10 @@ AI 输出经 `adopt({ target, data })` 写回,只有这里登记的字段可写(
 | `reference.characters` | `src/components/project/AnalysisReportViewer.tsx:138` |
 | `reference.summary` | `src/components/project/AnalysisReportViewer.tsx:109` |
 | `relation.extract` | `src/components/relations/CharacterRelationPanel.tsx:71` |
-| `review.anti-ai` | `src/components/editor/ReviewPanel.tsx:62` |
-| `review.quality` | `src/components/editor/ReviewPanel.tsx:54` |
-| `review.readability` | `src/components/editor/ReviewPanel.tsx:71` |
+| `review.anti-ai` | `src/components/editor/ReviewPanel.tsx:64` |
+| `review.quality` | `src/components/editor/ReviewPanel.tsx:56` |
+| `review.readability` | `src/components/editor/ReviewPanel.tsx:73` |
+| `review.revise` | `src/components/editor/ChapterEditor.tsx:339` |
 | `rules.generate` | `src/components/rules/CreativeRulesPanel.tsx:77` |
 | `scene.verify` | `src/components/scene/SceneVerifyPanel.tsx:76` |
 | `story-arc.generate` | `src/components/outline/StoryArcPanel.tsx:83` |
@@ -147,4 +148,4 @@ AI 输出经 `adopt({ target, data })` 写回,只有这里登记的字段可写(
 
 ---
 
-生成时间基准:commit `832120b`
+生成时间基准:commit `1e9081e`
