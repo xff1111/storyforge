@@ -200,6 +200,21 @@ function validateAndCoerce(spec: FieldSpec, value: unknown, result: AdoptResult)
     }
     return JSON.stringify(raw)
   }
+  if (spec.type === 'object') {
+    if (typeof raw === 'string') {
+      try {
+        const parsed = JSON.parse(raw)
+        if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) return parsed
+      } catch {
+        // fall through
+      }
+      result.typeErrors.push({ field: spec.field, expected: 'object', got: 'string' })
+      return undefined
+    }
+    if (raw && typeof raw === 'object' && !Array.isArray(raw)) return raw
+    result.typeErrors.push({ field: spec.field, expected: 'object', got: typeof value })
+    return undefined
+  }
   return undefined
 }
 

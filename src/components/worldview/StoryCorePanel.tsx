@@ -97,7 +97,7 @@ export default function StoryCorePanel({ project }: Props) {
   return (
     <div className="flex gap-4 max-w-5xl">
       {/* ── 左侧导航 ── */}
-      <div className="w-40 shrink-0 space-y-0.5 pt-1">
+      <div className="w-fit min-w-32 max-w-40 shrink-0 space-y-0.5 pt-1">
         {FIELDS.map(f => {
           const active = activeKey === f.key
           const hasContent = !!values[f.key]

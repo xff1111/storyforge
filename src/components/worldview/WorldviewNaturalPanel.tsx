@@ -135,7 +135,7 @@ export default function WorldviewNaturalPanel({ project }: Props) {
 
       <div className="flex flex-1 overflow-hidden">
         {/* ── 左侧边栏 ── */}
-        <nav className="w-48 flex-shrink-0 border-r border-border bg-bg-surface/50 overflow-y-auto">
+        <nav className="w-max min-w-32 max-w-44 flex-shrink-0 border-r border-border bg-bg-surface/50 overflow-y-auto">
           {[...FIELDS.map(f => ({ key: f.key, emoji: f.emoji, label: f.label })),
             { key: 'naturalResources' as const, emoji: '🌿', label: '自然资源' },
           ].map(f => {

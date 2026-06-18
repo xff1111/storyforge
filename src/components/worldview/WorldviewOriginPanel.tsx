@@ -141,7 +141,7 @@ export default function WorldviewOriginPanel({ project }: Props) {
 
       <div className="flex gap-4">
         {/* ── 左侧边栏 ── */}
-        <div className="w-44 shrink-0 space-y-0.5 pt-1">
+        <div className="w-fit min-w-32 max-w-44 shrink-0 space-y-0.5 pt-1">
           {FIELDS.map(f => {
             const isActive = active === f.key
             const isFieldStreaming = streamingKeys.has(f.key)
@@ -203,7 +203,10 @@ export default function WorldviewOriginPanel({ project }: Props) {
             <DivineFieldEditor
               field={FIELDS[2]}
               divineDesign={divineDesign}
-              onDivineChange={(next) => { setDivineDesign(next); save({ divineDesign: next }) }}
+              onDivineChange={async (next) => {
+                setDivineDesign(next)
+                await save({ divineDesign: next })
+              }}
               project={project}
               contextSummary={buildCtx('divine')}
               onStreamingChange={streaming => handleStreamingChange('divine', streaming)}
@@ -318,7 +321,7 @@ function DivineFieldEditor({
 }: {
   field: typeof FIELDS[number]
   divineDesign: DivineDesign
-  onDivineChange: (next: DivineDesign) => void
+  onDivineChange: (next: DivineDesign) => Promise<void>
   project: Project
   contextSummary: string
   onStreamingChange: (streaming: boolean) => void
@@ -397,7 +400,7 @@ function DivineFieldEditor({
       // 解析 JSON
       const cleaned = accumulated.replace(/^```(?:json)?\s*\n?/i, '').replace(/\n?\s*```\s*$/i, '').trim()
       const parsed = JSON.parse(cleaned)
-      onDivineChange({
+      await onDivineChange({
         hasDivinity: true,
         divineRank: String(parsed.divineRank || '').trim() || text,
         divineNames: String(parsed.divineNames || '').trim(),
@@ -405,7 +408,7 @@ function DivineFieldEditor({
       })
     } catch {
       // AI 拆分失败时，全部内容放入 divineRank，不丢失数据
-      onDivineChange({
+      await onDivineChange({
         hasDivinity: true,
         divineRank: text,
         divineNames: '',

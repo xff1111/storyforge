@@ -156,7 +156,7 @@ export interface FieldSpec {
   target: string
   /** canonical 字段名 */
   field: string
-  type: 'string' | 'longtext' | 'json' | 'number' | 'boolean' | 'enum' | 'array'
+  type: 'string' | 'longtext' | 'json' | 'object' | 'number' | 'boolean' | 'enum' | 'array'
   enums?: string[]
   worldScoped?: boolean
   aliases?: string[]

@@ -32,10 +32,26 @@ import OutlinePreview from '../outline/OutlinePreview'
 import ReviewPanel from './ReviewPanel'
 import NotePanel from './NotePanel'
 import FloatingToolbar from './FloatingToolbar'
-import type { Project, StateDiffItem } from '../../lib/types'
+import type { ChapterStatus, Project, StateDiffItem } from '../../lib/types'
 
 /** 生成任务类型(原 memory-builder 三层记忆已被 assembleContext 取代,此类型仅用于调试日志标签) */
 type MemoryTaskType = 'write' | 'plan' | 'review'
+
+const CHAPTER_STATUS_OPTIONS: { value: ChapterStatus; label: string }[] = [
+  { value: 'outline', label: '仅大纲' },
+  { value: 'draft', label: '初稿' },
+  { value: 'revised', label: '已修改' },
+  { value: 'polished', label: '已润色' },
+  { value: 'final', label: '定稿' },
+]
+
+const CHAPTER_STATUS_STYLE: Record<ChapterStatus, string> = {
+  outline: 'bg-bg-elevated text-text-muted',
+  draft: 'bg-warning/10 text-warning',
+  revised: 'bg-info/10 text-info',
+  polished: 'bg-accent/10 text-accent',
+  final: 'bg-success/10 text-success',
+}
 
 interface Props {
   project: Project
@@ -509,11 +525,19 @@ export default function ChapterEditor({ project, outlineNodeId }: Props) {
         <div className="flex items-center gap-3">
           <h2 className="text-lg font-bold text-text-primary">{currentChapter.title}</h2>
           <span className="text-xs text-text-muted">{wordCount} 字</span>
-          <span className={`text-xs px-2 py-0.5 rounded ${
-            currentChapter.status === 'draft' ? 'bg-warning/10 text-warning' :
-            currentChapter.status === 'polished' ? 'bg-success/10 text-success' :
-            'bg-bg-elevated text-text-muted'
-          }`}>{currentChapter.status}</span>
+          <select
+            aria-label="章节状态"
+            value={currentChapter.status}
+            onChange={e => currentChapter.id && updateChapter(currentChapter.id, {
+              status: e.target.value as ChapterStatus,
+            })}
+            title="章节状态会决定该章是否可用于文风学习"
+            className={`text-xs px-2 py-1 rounded border border-transparent focus:outline-none focus:border-accent cursor-pointer ${CHAPTER_STATUS_STYLE[currentChapter.status]}`}
+          >
+            {CHAPTER_STATUS_OPTIONS.map(option => (
+              <option key={option.value} value={option.value}>{option.label}</option>
+            ))}
+          </select>
         </div>
         <div className="flex items-center gap-2">
           <button onClick={() => setShowContext(!showContext)}

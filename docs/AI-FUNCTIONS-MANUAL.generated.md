@@ -102,12 +102,12 @@ AI 输出经 `adopt({ target, data })` 写回,只有这里登记的字段可写(
 | category | 触发文件 |
 |---|---|
 | `ai.restructure` | `src/lib/ai/restructure.ts:52` |
-| `chapter.content` | `src/components/editor/ChapterEditor.tsx:283` |
+| `chapter.content` | `src/components/editor/ChapterEditor.tsx:299` |
 | `chapter.content.batch` | `src/lib/ai/batch-detail-runner.ts:256` |
-| `chapter.continue` | `src/components/editor/ChapterEditor.tsx:293` |
-| `chapter.deai` | `src/components/editor/ChapterEditor.tsx:329` |
-| `chapter.expand` | `src/components/editor/ChapterEditor.tsx:309` |
-| `chapter.polish` | `src/components/editor/ChapterEditor.tsx:301` |
+| `chapter.continue` | `src/components/editor/ChapterEditor.tsx:309` |
+| `chapter.deai` | `src/components/editor/ChapterEditor.tsx:345` |
+| `chapter.expand` | `src/components/editor/ChapterEditor.tsx:325` |
+| `chapter.polish` | `src/components/editor/ChapterEditor.tsx:317` |
 | `chapter.toolbar` | `src/components/editor/FloatingToolbar.tsx:105` |
 | `character.generate` | `src/components/character/CharacterPanel.tsx:137` |
 | `character.structure` | `src/lib/ai/parse-character-output.ts:92` |
@@ -129,7 +129,7 @@ AI 输出经 `adopt({ target, data })` 写回,只有这里登记的字段可写(
 | `review.anti-ai` | `src/components/editor/ReviewPanel.tsx:66` |
 | `review.quality` | `src/components/editor/ReviewPanel.tsx:58` |
 | `review.readability` | `src/components/editor/ReviewPanel.tsx:75` |
-| `review.revise` | `src/components/editor/ChapterEditor.tsx:344` |
+| `review.revise` | `src/components/editor/ChapterEditor.tsx:360` |
 | `rules.generate` | `src/components/rules/CreativeRulesPanel.tsx:80` |
 | `scene.verify` | `src/components/scene/SceneVerifyPanel.tsx:81` |
 | `story-arc.generate` | `src/components/outline/StoryArcPanel.tsx:84` |
@@ -138,9 +138,9 @@ AI 输出经 `adopt({ target, data })` 写回,只有这里登记的字段可写(
 | `style.learn` | `src/components/style/StyleLearningPanel.tsx:76` |
 | `world-group.expand` | `src/components/world-group/WorldGroupDetail.tsx:98` |
 | `world-group.suggest` | `src/components/world-group/WorldGroupOverview.tsx:57` |
-| `worldview.dimension` | `src/components/worldview/WorldviewHumanityPanel.tsx:247`<br/>`src/components/worldview/WorldviewNaturalPanel.tsx:266`<br/>`src/components/worldview/WorldviewOriginPanel.tsx:270` |
-| `worldview.divine` | `src/components/worldview/WorldviewOriginPanel.tsx:369` |
-| `worldview.divine.split` | `src/components/worldview/WorldviewOriginPanel.tsx:393` |
+| `worldview.dimension` | `src/components/worldview/WorldviewHumanityPanel.tsx:247`<br/>`src/components/worldview/WorldviewNaturalPanel.tsx:266`<br/>`src/components/worldview/WorldviewOriginPanel.tsx:273` |
+| `worldview.divine` | `src/components/worldview/WorldviewOriginPanel.tsx:372` |
+| `worldview.divine.split` | `src/components/worldview/WorldviewOriginPanel.tsx:396` |
 
 ### 动态 category 调用
 
@@ -148,4 +148,4 @@ AI 输出经 `adopt({ target, data })` 写回,只有这里登记的字段可写(
 
 ---
 
-生成时间基准:commit `3d5605c`
+生成时间基准:commit `ff98373`

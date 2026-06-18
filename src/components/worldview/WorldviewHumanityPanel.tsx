@@ -146,7 +146,7 @@ export default function WorldviewHumanityPanel({ project }: Props) {
 
       <div className="flex flex-1 overflow-hidden">
         {/* ── 左侧导航 ── */}
-        <nav className="w-48 flex-shrink-0 border-r border-border overflow-y-auto py-4 pr-1">
+        <nav className="w-max min-w-32 max-w-44 flex-shrink-0 border-r border-border overflow-y-auto py-4 pr-1">
           {FIELDS.map(f => {
             const isActive = f.key === activeKey
             const isFieldStreaming = streamingKeys.has(f.key)
