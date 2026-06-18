@@ -15,7 +15,7 @@
 | `worldview.dimension` | 内置-世界观维度生成 | 为世界观的单个维度（地理/历史/社会/文化/经济/规则/摘要）生成内容。 | `projectName` `genres` `dimension` `worldContext` `worldRulesContext` `userHint` `isSummary` |
 | `character.generate` | 内置-角色完整设计 | 基于世界观和已有角色，设计一个新角色的完整资料。 | `projectName` `genres` `worldContext` `existingCharacters` `userHint` |
 | `character.dimension` | 内置-角色维度补全 | 为指定角色的某个维度（背景/性格/能力等）补充约 200-400 字的细节。 | `characterName` `characterInfo` `worldContext` `dimension` |
-| `outline.volume` | 内置-卷级大纲生成 | 基于世界观与故事核心生成全书的卷级大纲。 | `projectName` `genres` `targetWordCount` `estimatedVolumes` `worldContext` `storyCore` `characterContext` `worldRulesContext` `userHint` |
+| `outline.volume` | 内置-卷级大纲生成 | 基于世界观与故事核心生成全书的卷级大纲。 | `projectName` `genres` `targetWordCount` `worldContext` `storyCore` `characterContext` `worldRulesContext` `existingVolumesContext` `userHint` |
 | `outline.chapter` | 内置-章节大纲展开 | 将单卷展开为 15-25 章的章节大纲。 | `volumeTitle` `volumeSummary` `worldContext` `prevVolumeSummary` `characterContext` `worldRulesContext` `userHint` |
 | `chapter.content` | 内置-长篇连载（默认） | 通用男频网文风格的章节正文生成，支持基调/节奏/字数三个可调参数。 | `chapterTitle` `chapterSummary` `worldContext` `characters` `previousChapterEnding` `worldRulesContext` `userHint` |
 | `chapter.continue` | 内置-章节续写 | 从已有正文末尾继续往下写约 1000-2000 字。 | `chapterSummary` `worldContext` `existingContent` `userHint` |
@@ -50,12 +50,13 @@
 
 ## 二、上下文源清单（CONTEXT_SOURCES · AI 读什么）
 
-共 19 个上下文源。assembleContext({ sourceKeys }) 按 key 装配。
+共 20 个上下文源。assembleContext({ sourceKeys }) 按 key 装配。
 
 | key | 标签 | 作用域 | 层级 | 预算(token) |
 |---|---|---|---|---|
 | `contextMemo` | 上下文快照 | project | L3 | 1500 |
 | `chapterOutline` | 当前章节大纲 | node | L1 | 800 |
+| `existingVolumeOutlines` | 已有卷大纲 | project | L1 | 2400 |
 | `detailedOutline` | 本章细纲(场景拆解) | node | L1 | 1500 |
 | `previousChapterEnding` | 上一章结尾 | manual | L1 | 500 |
 | `worldview` | 世界观 | world | L2 | 8000 |
@@ -119,9 +120,9 @@ AI 输出经 `adopt({ target, data })` 写回,只有这里登记的字段可写(
 | `geography.world-map` | `src/components/geography/WorldMapPanel.tsx:103` |
 | `inspiration.reverse` | `src/components/project/InspirationPanel.tsx:111` |
 | `inventory.extract` | `src/components/items/InventoryPanel.tsx:63` |
-| `outline.chapter` | `src/components/outline/OutlinePanel.tsx:251`<br/>`src/lib/ai/batch-outline-runner.ts:123` |
+| `outline.chapter` | `src/components/outline/OutlinePanel.tsx:376`<br/>`src/lib/ai/batch-outline-runner.ts:123` |
 | `outline.character-driven` | `src/components/outline/CharacterDrivenPlotPanel.tsx:116` |
-| `outline.volume` | `src/components/outline/OutlinePanel.tsx:235` |
+| `outline.volume` | `src/components/outline/OutlinePanel.tsx:328` |
 | `prompt.examples` | `src/components/settings/prompt/PromptExamplesEditor.tsx:105` |
 | `reference.characters` | `src/components/project/AnalysisReportViewer.tsx:138` |
 | `reference.summary` | `src/components/project/AnalysisReportViewer.tsx:109` |
@@ -148,4 +149,4 @@ AI 输出经 `adopt({ target, data })` 写回,只有这里登记的字段可写(
 
 ---
 
-生成时间基准:commit `ff98373`
+生成时间基准:commit `6638c47`

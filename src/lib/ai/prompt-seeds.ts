@@ -280,7 +280,7 @@ export const SYSTEM_PROMPT_SEEDS: PromptSeed[] = [
     userPromptTemplate: `小说名称：{{projectName}}
 小说类型：{{genres}}
 目标字数：约 {{targetWordCount}} 字
-建议卷数：约 {{estimatedVolumes}} 卷
+{{#if usesVolumeCount}}最终总卷数：严格为 {{volumeCount}} 卷{{/if}}{{#if notUsesVolumeCount}}卷数规划：不预设固定卷数，请依据世界观、故事核心、目标字数与剧情阶段合理编排。{{/if}}
 
 世界观设定：
 {{worldContext}}
@@ -294,6 +294,9 @@ export const SYSTEM_PROMPT_SEEDS: PromptSeed[] = [
 
 {{worldRulesContext}}
 {{/if}}
+{{#if existingVolumesContext}}
+{{existingVolumesContext}}
+{{/if}}
 请生成卷级大纲。围绕核心角色展开主线，配角在合适时机登场推动剧情。
 
 每卷 summary 请涵盖：①本卷核心冲突/主线目标 ②情绪走向（蓄力→高潮→余韵）③主角状态变化 ④卷末悬念/钩子。
@@ -305,7 +308,7 @@ export const SYSTEM_PROMPT_SEEDS: PromptSeed[] = [
 不要输出 JSON 以外的任何文字。{{#if userHint}}
 
 用户补充要求：{{userHint}}{{/if}}`,
-    variables: ['projectName', 'genres', 'targetWordCount', 'estimatedVolumes', 'worldContext', 'storyCore', 'characterContext', 'worldRulesContext', 'userHint'],
+    variables: ['projectName', 'genres', 'targetWordCount', 'worldContext', 'storyCore', 'characterContext', 'worldRulesContext', 'existingVolumesContext', 'userHint'],
     parameters: [
       { key: 'pace', label: '整体节奏', type: 'select',
         options: ['慢', '中', '快', '极快'],

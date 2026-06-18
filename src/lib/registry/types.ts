@@ -191,6 +191,8 @@ export interface CollectionAdoptionSpec {
 export interface AdoptInput {
   projectId: number
   worldGroupId?: number | null
+  /** 集合表中定点更新既有记录；AI 补全空卷/空章等场景使用。 */
+  recordId?: number
   target: string
   data: Record<string, unknown> | Record<string, unknown>[]
   mode: 'replace' | 'append' | 'add' | 'add-many' | 'merge-diffs'
