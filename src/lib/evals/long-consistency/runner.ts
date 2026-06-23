@@ -24,10 +24,10 @@ export const NS1_ACCEPTANCE_THRESHOLDS = Object.freeze({
 })
 
 export const NS0_FIXED_MAX_TOKENS = 1200
-export const NS0_RESULTS_STORAGE_KEY = 'storyforge-ns0-long-consistency-results-v3'
+export const NS0_RESULTS_STORAGE_KEY = 'storyforge-ns0-long-consistency-results-v4'
 // Bump this key for each sealed held-out attempt. Earlier versions remain in
 // browser storage as audit records and are never reused for tuning.
-export const NS0_PAIRED_RESULTS_STORAGE_KEY = 'storyforge-ns0-long-consistency-paired-v3'
+export const NS0_PAIRED_RESULTS_STORAGE_KEY = 'storyforge-ns0-long-consistency-paired-v4'
 
 export interface Ns1GateResult {
   passed: boolean

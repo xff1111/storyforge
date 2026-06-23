@@ -19,6 +19,21 @@ export interface RunOptions {
   skipContinuityEnvelope?: boolean
 }
 
+const QUARANTINED_GENERATION_MARKERS = ['未来计划', '尚未发生', '异世界档案']
+
+/**
+ * Planning-only and foreign-world sentences can remain available to planning
+ * tools, but prose generation must not see them as competing current canon.
+ */
+export function sanitizeProseGenerationContext(text: string): string {
+  if (!text) return text
+  const chunks = text.match(/[^。！？\n]*[。！？\n]?/gu) ?? [text]
+  return chunks
+    .filter(chunk => !QUARANTINED_GENERATION_MARKERS.some(marker => chunk.includes(marker)))
+    .join('')
+    .trim()
+}
+
 function trimPart(text: string, maxChars: number, keepTail = false): string {
   if (!text || text.length <= maxChars) return text
   return keepTail
@@ -91,10 +106,13 @@ export function buildChapterContentPrompt(
   options?: RunOptions,
 ): ChatMessage[] {
   const tpl = usePromptStore.getState().getActive('chapter.content')
+  const safeWorldContext = options?.skipContinuityEnvelope
+    ? worldContext
+    : sanitizeProseGenerationContext(worldContext)
   const { messages } = renderPrompt(tpl, {
     chapterTitle,
     chapterSummary,
-    worldContext: worldContext || '（暂无）',
+    worldContext: safeWorldContext || '（暂无）',
     characters: characterContext || '（暂无角色设定）',
     previousChapterEnding: options?.continuity ? '（见文末连续性保护块）' : (previousChapterEnding || '（这是第一章）'),
     worldRulesContext: worldRulesContext || '',
@@ -118,9 +136,12 @@ export function buildContinuePrompt(
   options?: RunOptions,
 ): ChatMessage[] {
   const tpl = usePromptStore.getState().getActive('chapter.continue')
+  const safeWorldContext = options?.skipContinuityEnvelope
+    ? worldContext
+    : sanitizeProseGenerationContext(worldContext)
   const { messages } = renderPrompt(tpl, {
     chapterSummary,
-    worldContext: worldContext || '（暂无）',
+    worldContext: safeWorldContext || '（暂无）',
     existingContent: existingContent.slice(-3000),
     userHint,
   }, options)

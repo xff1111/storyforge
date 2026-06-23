@@ -22,12 +22,16 @@ describe('NS-0 long-consistency evaluation harness', () => {
       'held-final-completion-seal',
       'held-final-continuation-tidelock',
       'held-final-expansion-mask',
-    ])
-    expect(getFixtures('held-out').map(fixture => fixture.id)).toEqual([
       'held-v3-completion-ferry',
       'held-v3-continuation-fourth-chime',
       'held-v3-expansion-porcelain',
       'held-v3-completion-salt-pass',
+    ])
+    expect(getFixtures('held-out').map(fixture => fixture.id)).toEqual([
+      'held-v4-completion-archive',
+      'held-v4-continuation-fifth-drop',
+      'held-v4-expansion-bronze-cup',
+      'held-v4-continuation-red-flag',
     ])
   })
 
@@ -46,6 +50,20 @@ describe('NS-0 long-consistency evaluation harness', () => {
     expect(completion.messages.at(-1)?.content).not.toContain(fixtures[0].previousChapterText.slice(0, 40))
     expect(continuation.productionSnapshot.builder).toBe('chapter.continue')
     expect(expansion.productionSnapshot.builder).toBe('chapter.expand')
+  })
+
+  it('quarantines labeled future and foreign-world prose from candidate prompts only', () => {
+    const fixture = getFixtures('development')[0]
+    const legacy = buildEvalCase(fixture, 'legacy-500-tail')
+    const candidate = buildEvalCase(fixture, 'handoff-tail-summary')
+    const legacyText = legacy.messages.map(message => message.content).join('\n')
+    const candidateText = candidate.messages.map(message => message.content).join('\n')
+
+    expect(legacyText).toContain('未来计划（尚未发生）')
+    expect(legacyText).toContain('异世界档案')
+    expect(candidateText).not.toContain('银冠加冕')
+    expect(candidateText).not.toContain('黑曜石哨')
+    expect(candidateText).toContain('雾港通行证是青铜铃')
   })
 
   it('scores deterministic facts, constraints, future leakage, foreign-world leakage and evidence', () => {
