@@ -2221,6 +2221,15 @@ NS-2 + NS-4 + NS-5 → NS-6
 - 用户自定义旧 `chapter.memory` 模板缺少计划变量时采用兼容追加，不要求立即重建模板。
 - 验证：全量 `69 files / 258 tests`、TypeScript、生产构建、架构守卫、39 tables、生成版 AI manual 全绿；Agnes 真实刷新第 1 章成功产出证据化对账，并识别“正文已进入大祭司当面对峙、下一章不能再静默执行原求证计划”的冲突，UI 正确提供两种作者处理入口。
 
+#### ✅ NS-3 · 早期证据化校验完成（2026-06-23 · 待 Claude 审查）
+
+- 质量审校新增独立“一致性”页，提供 Fast Guard（地点/世界/存亡/物品/力量/知识/时间/直接规则）与 Deep Audit（因果/动机/弧光/伏笔/故事线/复杂时间/社会规范）；
+- 新增注册表上下文源 `itemLedger`、`storyTimeline`、`characterRelations`，并复用状态卡、世界规则、角色、伏笔、故事线、最近摘要、handoff 与计划对账；审计调用不绕过 `CONTEXT_SOURCES`；
+- 统一 `ConsistencyFinding` 为 `hard / risk / unknown`，展示正文逐字 quote、证据类型/ID/逐字 quote、原因与建议；
+- 解析器强制回查：正文 quote 不存在则整条丢弃；hard 没有至少一条可在证据上下文精确定位的引文时自动降为 unknown；模型自报 confidence 不参与严重度；
+- Fast Guard / Deep Audit 均只读并仅缓存于会话，不自动修改任何数据；旧“按审校报告修改”仍只服务原编辑审校，不会把一致性发现自动改稿；
+- 初始 benchmark 覆盖有效 hard、伪造正文引文、伪造证据、无证据 hard 降级和完整长正文不截断。真实 Agnes Fast Guard 在第 1 章只报告 1 条可解释 risk + 1 条 unknown，均展示可回查证据，未误报 hard。
+
 ---
 
 ## 〆 终

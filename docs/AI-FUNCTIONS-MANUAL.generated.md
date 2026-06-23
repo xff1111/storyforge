@@ -55,7 +55,7 @@
 
 ## 二、上下文源清单（CONTEXT_SOURCES · AI 读什么）
 
-共 25 个上下文源。assembleContext({ sourceKeys }) 按 key 装配。
+共 28 个上下文源。assembleContext({ sourceKeys }) 按 key 装配。
 
 | key | 标签 | 作用域 | 层级 | 预算(token) |
 |---|---|---|---|---|
@@ -82,6 +82,9 @@
 | `storyArcs` | 故事线 | project | L2 | 1500 |
 | `emotionBeats` | 情感节拍 | chapter | L1 | 1000 |
 | `stateCards` | 状态卡 | project | L2 | 1800 |
+| `itemLedger` | 物品流水 | project | L2 | 2400 |
+| `storyTimeline` | 故事年表 | project | L2 | 2600 |
+| `characterRelations` | 角色关系 | project | L2 | 2200 |
 | `references` | 引用手法 | project | L3 | 2000 |
 | `userStyleProfile` | 我的文风 | project | L2 | 700 |
 
@@ -112,7 +115,7 @@ AI 输出经 `adopt({ target, data })` 写回,只有这里登记的字段可写(
 ## 四、AI 调用点（消耗统计 category · 在哪触发)
 
 共 43 个 category。
-未分类调用: 0 个。动态 category 调用: 2 个。
+未分类调用: 0 个。动态 category 调用: 3 个。
 
 | category | 触发文件 |
 |---|---|
@@ -144,9 +147,9 @@ AI 输出经 `adopt({ target, data })` 写回,只有这里登记的字段可写(
 | `reference.characters` | `src/components/project/AnalysisReportViewer.tsx:138` |
 | `reference.summary` | `src/components/project/AnalysisReportViewer.tsx:109` |
 | `relation.extract` | `src/components/relations/CharacterRelationPanel.tsx:73` |
-| `review.anti-ai` | `src/components/editor/ReviewPanel.tsx:66` |
-| `review.quality` | `src/components/editor/ReviewPanel.tsx:58` |
-| `review.readability` | `src/components/editor/ReviewPanel.tsx:75` |
+| `review.anti-ai` | `src/components/editor/ReviewPanel.tsx:83` |
+| `review.quality` | `src/components/editor/ReviewPanel.tsx:75` |
+| `review.readability` | `src/components/editor/ReviewPanel.tsx:92` |
 | `review.revise` | `src/components/editor/ChapterEditor.tsx:484` |
 | `rules.generate` | `src/components/rules/CreativeRulesPanel.tsx:80` |
 | `scene.verify` | `src/components/scene/SceneVerifyPanel.tsx:81` |
@@ -162,9 +165,10 @@ AI 输出经 `adopt({ target, data })` 写回,只有这里登记的字段可写(
 
 ### 动态 category 调用
 
+- `src/components/editor/ReviewPanel.tsx:121 · ai.start`
 - `src/components/settings/NS0EvalPanel.tsx:48 · chat`
 - `src/components/settings/prompt/WorkflowRunner.tsx:273 · ai.start`
 
 ---
 
-生成时间基准:commit `a2a6f92`
+生成时间基准:commit `c1d42bb`

@@ -175,6 +175,40 @@ async function readDetailedOutline(projectId: number, outlineNodeId?: number | n
   return parts.join('\n')
 }
 
+async function readItemLedger(projectId: number): Promise<string> {
+  const rows = await db.itemLedger.where('projectId').equals(projectId).toArray()
+  if (!rows.length) return ''
+  return [
+    '【物品流水证据】',
+    ...rows.slice(-120).map(row =>
+      `#${row.id ?? 0} ${row.chapterTitle ?? `章节#${row.chapterId ?? '?'}`}：${row.action === 'gain' ? '获得' : '消耗'} ${row.itemName} ×${row.quantity}${row.note ? `（${row.note}）` : ''}`),
+  ].join('\n')
+}
+
+async function readStoryTimeline(projectId: number): Promise<string> {
+  const rows = await db.storyTimelineEvents.where('projectId').equals(projectId).sortBy('order')
+  if (!rows.length) return ''
+  return [
+    '【故事年表证据】',
+    ...rows.slice(-120).map(row =>
+      `#${row.id ?? 0} ${row.storyTime ? `${row.storyTime} · ` : ''}${row.title}${row.description ? `：${row.description}` : ''}（${row.chapterTitle ?? `章节#${row.chapterId ?? '?'}`}）`),
+  ].join('\n')
+}
+
+async function readCharacterRelations(projectId: number): Promise<string> {
+  const [rows, characters] = await Promise.all([
+    db.characterRelations.where('projectId').equals(projectId).toArray(),
+    db.characters.where('projectId').equals(projectId).toArray(),
+  ])
+  if (!rows.length) return ''
+  const names = new Map(characters.filter(item => item.id != null).map(item => [item.id!, item.name]))
+  return [
+    '【角色关系证据】',
+    ...rows.slice(0, 160).map(row =>
+      `#${row.id ?? 0} ${names.get(row.fromCharacterId) ?? `角色#${row.fromCharacterId}`} → ${names.get(row.toCharacterId) ?? `角色#${row.toCharacterId}`}：${row.label}${row.description ? `（${row.description}）` : ''}`),
+  ].join('\n')
+}
+
 export const CONTEXT_SOURCES: ContextSource[] = [
   {
     key: 'manualText',
@@ -382,6 +416,30 @@ export const CONTEXT_SOURCES: ContextSource[] = [
     layer: 'L2',
     budgetTokens: 1800,
     read: input => readStateCards(input.projectId, input.stateReferenceText, input.extraStateIds),
+  },
+  {
+    key: 'itemLedger',
+    label: '物品流水',
+    scope: 'project',
+    layer: 'L2',
+    budgetTokens: 2400,
+    read: input => readItemLedger(input.projectId),
+  },
+  {
+    key: 'storyTimeline',
+    label: '故事年表',
+    scope: 'project',
+    layer: 'L2',
+    budgetTokens: 2600,
+    read: input => readStoryTimeline(input.projectId),
+  },
+  {
+    key: 'characterRelations',
+    label: '角色关系',
+    scope: 'project',
+    layer: 'L2',
+    budgetTokens: 2200,
+    read: input => readCharacterRelations(input.projectId),
   },
   {
     key: 'references',
