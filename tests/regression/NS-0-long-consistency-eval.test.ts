@@ -60,7 +60,7 @@ describe('NS-0 long-consistency evaluation harness', () => {
     expect(expansion.productionSnapshot.builder).toBe('chapter.expand')
   })
 
-  it('quarantines labeled future and foreign-world prose from candidate prompts only', () => {
+  it('quarantines labeled future/foreign prose and never injects the scoring answer key', () => {
     const fixture = getFixtures('development')[0]
     const legacy = buildEvalCase(fixture, 'legacy-500-tail')
     const candidate = buildEvalCase(fixture, 'handoff-tail-summary')
@@ -71,7 +71,25 @@ describe('NS-0 long-consistency evaluation harness', () => {
     expect(legacyText).toContain('异世界档案')
     expect(candidateText).not.toContain('银冠加冕')
     expect(candidateText).not.toContain('黑曜石哨')
-    expect(candidateText).toContain('雾港通行证是青铜铃')
+
+    // 去污染铁证：候选 prompt 不再含"喂答案"脚手架（旧实现把 requiredFacts 注进 prompt，
+    // 评测变成"抄答案 → 复述答案"的自我实现）。
+    expect(candidateText).not.toContain('为自动验收')
+    expect(candidateText).not.toContain('实验性交接约束')
+    expect(candidateText).not.toContain('实验性历史摘要')
+
+    // 真实 handoff 才会被注入：用 stub 抽取记忆验证生产同款序列化进了 prompt。
+    const withHandoff = buildEvalCase(fixture, 'handoff-tail-summary', {
+      handoffText: '结尾地点：雾港码头\n最后动作：把青铜铃藏进左袖',
+      summaryText: '本章林砚与苏禾约定暗号。',
+      extractionInputTokens: null,
+      extractionOutputTokens: null,
+      extractionInputChars: 0,
+      extractionOutputChars: 0,
+    })
+    const withHandoffText = withHandoff.messages.map(message => message.content).join('\n')
+    expect(withHandoffText).toContain('结尾地点：雾港码头')
+    expect(withHandoffText).toContain('本章林砚与苏禾约定暗号')
   })
 
   it('scores deterministic facts, constraints, future leakage, foreign-world leakage and evidence', () => {
@@ -183,7 +201,9 @@ describe('NS-0 long-consistency evaluation harness', () => {
       'natural:legacy-500-tail',
       'natural:handoff-tail-summary',
     ])
-    expect(seenMaxTokens).toEqual([1200, 1200, 4096, 4096])
+    // handoff 候选每个 case 多一次"真实抽取"调用（从上一章正文抽 handoff/摘要，
+    // 不喂答案），与生成调用同预算；legacy 无抽取。故每模式下为 [legacy gen, handoff 抽取, handoff gen]。
+    expect(seenMaxTokens).toEqual([1200, 1200, 1200, 4096, 4096, 4096])
   })
 
   it('applies the pre-registered NS-1 gate without post-hoc threshold changes', () => {

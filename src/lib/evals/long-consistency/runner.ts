@@ -1,4 +1,6 @@
 import { buildChapterContentPrompt, buildContinuePrompt, buildExpandPrompt } from '../../ai/adapters/chapter-adapter'
+import { prepareChapterMemoryRequest, parseChapterMemoryOutput } from '../../ai/adapters/chapter-memory-adapter'
+import { formatHandoff } from '../../ai/chapter-memory/handoff-format'
 import { estimateTokens } from '../../ai/context-budget'
 import type { AIConfig, ChatMessage } from '../../types'
 import type { TokenUsage } from '../../ai/logger'
@@ -62,55 +64,106 @@ export function evaluateNs1Gate(
   return { passed: failures.length === 0, failures }
 }
 
-function appendExperimentalContext(messages: ChatMessage[], fixture: LongConsistencyFixture, variant: EvalVariant): ChatMessage[] {
-  if (variant === 'legacy-500-tail') return messages
-
-  const summary = [
-    '【实验性历史摘要】',
-    '为自动验收，请在输出前半段自然复用下列事实的中文措辞：',
-    ...fixture.requiredFacts.map(fact => `${fact.id}: ${fact.aliases[0]}`),
-  ].join('\n')
-  const handoff = [
-    '【实验性交接约束】',
-    ...fixture.requiredConstraints.map(constraint => `${constraint.id}: ${constraint.aliases[0]}`),
-    ...fixture.evidenceIds.map(id => `证据引用格式：[证据:${id}]`),
-    '输出契约：在正文前 40% 用可观察的动作逐项落实上述约束，不得只暗示。',
-    '不得把标为“未来计划”或“异世界档案”的信息写成当前已发生事实。',
-  ].join('\n')
-
-  return messages.map((message, index) => {
-    if (index !== messages.length - 1 || message.role !== 'user') return message
-    const extra = variant === 'tail-summary' ? summary : `${summary}\n\n${handoff}`
-    return { ...message, content: `${message.content}\n\n${extra}` }
-  })
+/**
+ * 候选变体喂给模型的"历史记忆"——由生产抽取器从【上一章真实正文】现抽，
+ * 绝不注入夹具的 requiredFacts/requiredConstraints（那是评分答案）。
+ * 这样 A/B 测的才是"从正文抽 handoff/摘要到底有没有把该带的事实带过去"，
+ * 而不是"把答案抄给模型它会不会复述"。
+ */
+export interface ExtractedEvalMemory {
+  handoffText: string
+  summaryText: string
+  extractionInputTokens: number | null
+  extractionOutputTokens: number | null
+  extractionInputChars: number
+  extractionOutputChars: number
 }
 
-function buildEvalContinuity(fixture: LongConsistencyFixture, variant: EvalVariant) {
-  if (variant === 'legacy-500-tail') return undefined
-  const recentSummaries = [
-    '【实验性历史摘要】',
-    '为自动验收，请在输出前半段自然复用下列事实的中文措辞：',
-    ...fixture.requiredFacts.map(fact => `${fact.id}: ${fact.aliases[0]}`),
-  ].join('\n')
-  const handoff = variant === 'handoff-tail-summary'
-    ? [
-        '【实验性交接约束】',
-        ...fixture.requiredConstraints.map(constraint => `${constraint.id}: ${constraint.aliases[0]}`),
-        ...fixture.evidenceIds.map(id => `证据引用格式：[证据:${id}]`),
-        '输出契约：在正文前 40% 用可观察的动作逐项落实上述约束，不得只暗示。',
-        '不得把标为“未来计划”或“异世界档案”的信息写成当前已发生事实。',
-      ].join('\n')
-    : undefined
+export const EMPTY_EVAL_MEMORY: ExtractedEvalMemory = {
+  handoffText: '',
+  summaryText: '',
+  extractionInputTokens: null,
+  extractionOutputTokens: null,
+  extractionInputChars: 0,
+  extractionOutputChars: 0,
+}
+
+function evalExtractionSource(fixture: LongConsistencyFixture): string {
+  return fixture.previousChapterText || fixture.existingContent || fixture.selectedText || ''
+}
+
+/**
+ * 对非 legacy 变体，调真实 chapter.memory 抽取器从上一章正文产出 handoff/摘要。
+ * 抽取本身要花一次模型调用——其 token 必须计入候选成本，A/B 成本比较才诚实。
+ */
+export async function extractEvalMemory(
+  fixture: LongConsistencyFixture,
+  variant: EvalVariant,
+  call: (messages: ChatMessage[], config: AIConfig) => Promise<{ output: string; usage?: TokenUsage }>,
+  config: AIConfig,
+): Promise<ExtractedEvalMemory> {
+  if (variant === 'legacy-500-tail') return EMPTY_EVAL_MEMORY
+  const source = evalExtractionSource(fixture)
+  if (!source.trim()) return EMPTY_EVAL_MEMORY
+
+  const prepared = await prepareChapterMemoryRequest(fixture.title, source)
+  const response = await call(prepared.messages, { ...config, temperature: 0.1 })
+  const extractionInputChars = prepared.messages.reduce((sum, message) => sum + message.content.length, 0)
+  const extractionOutputChars = response.output.length
+  const parsed = parseChapterMemoryOutput({
+    raw: response.output,
+    chapterId: 0,
+    normalizedText: prepared.normalizedText,
+    sourceTextHash: prepared.sourceTextHash,
+  })
+  if (!parsed) {
+    // 抽取失败是真实信号（handoff 可能抽不出）——候选此时退化为 tail-only。
+    return {
+      ...EMPTY_EVAL_MEMORY,
+      extractionInputTokens: response.usage?.inputTokens ?? null,
+      extractionOutputTokens: response.usage?.outputTokens ?? null,
+      extractionInputChars,
+      extractionOutputChars,
+    }
+  }
   return {
-    handoff,
-    previousTail: fixture.task === 'completion'
-      ? fixture.previousChapterText.slice(-500)
-      : undefined,
-    recentSummaries,
+    handoffText: variant === 'handoff-tail-summary' ? formatHandoff(parsed.handoff).join('\n') : '',
+    summaryText: parsed.summary,
+    extractionInputTokens: response.usage?.inputTokens ?? null,
+    extractionOutputTokens: response.usage?.outputTokens ?? null,
+    extractionInputChars,
+    extractionOutputChars,
   }
 }
 
-export function buildEvalCase(fixture: LongConsistencyFixture, variant: EvalVariant): BuiltEvalCase {
+function buildEvalContinuity(fixture: LongConsistencyFixture, variant: EvalVariant, memory: ExtractedEvalMemory) {
+  if (variant === 'legacy-500-tail') return undefined
+  return {
+    handoff: memory.handoffText || undefined,
+    previousTail: fixture.task === 'completion'
+      ? fixture.previousChapterText.slice(-500)
+      : undefined,
+    recentSummaries: memory.summaryText
+      ? `【当前世界最近已验证章节摘要】\n${memory.summaryText}`
+      : undefined,
+  }
+}
+
+/** expansion 任务的 builder 不吃 continuity 选项，对它把真实抽取记忆追加到末尾（非答案）。 */
+function appendRealContinuity(messages: ChatMessage[], memory: ExtractedEvalMemory): ChatMessage[] {
+  const extras = [memory.summaryText, memory.handoffText].filter(Boolean)
+  if (!extras.length) return messages
+  return messages.map((message, index) => {
+    if (index !== messages.length - 1 || message.role !== 'user') return message
+    return { ...message, content: `${message.content}\n\n【前文连续性记忆】\n${extras.join('\n')}` }
+  })
+}
+
+export function buildEvalCase(
+  fixture: LongConsistencyFixture,
+  variant: EvalVariant,
+  memory: ExtractedEvalMemory = EMPTY_EVAL_MEMORY,
+): BuiltEvalCase {
   let messages: ChatMessage[]
   let builder: BuiltEvalCase['productionSnapshot']['builder']
   let previousTailChars = 0
@@ -129,7 +182,7 @@ export function buildEvalCase(fixture: LongConsistencyFixture, variant: EvalVari
       fixture.userHint,
       {
         parameterValues: { chapterLength: 800, pace: '中', tone: '严肃' },
-        continuity: buildEvalContinuity(fixture, variant),
+        continuity: buildEvalContinuity(fixture, variant, memory),
         continuityBudgetTokens: 3000,
         skipContinuityEnvelope: variant === 'legacy-500-tail',
       },
@@ -143,7 +196,7 @@ export function buildEvalCase(fixture: LongConsistencyFixture, variant: EvalVari
       fixture.userHint,
       {
         parameterValues: { continueLength: 800, pace: '中', tone: '严肃' },
-        continuity: buildEvalContinuity(fixture, variant),
+        continuity: buildEvalContinuity(fixture, variant, memory),
         continuityBudgetTokens: 3000,
         skipContinuityEnvelope: variant === 'legacy-500-tail',
       },
@@ -157,8 +210,8 @@ export function buildEvalCase(fixture: LongConsistencyFixture, variant: EvalVari
     )
   }
 
-  const finalMessages = fixture.task === 'expansion'
-    ? appendExperimentalContext(messages, fixture, variant)
+  const finalMessages = fixture.task === 'expansion' && variant !== 'legacy-500-tail'
+    ? appendRealContinuity(messages, memory)
     : messages
   return {
     fixtureId: fixture.id,
@@ -230,6 +283,12 @@ export function aggregateScores(
   }
 }
 
+/** 两段 token 用量相加；只有都缺失才返回 null（用于把抽取调用成本并入候选）。 */
+function combineTokens(a: number | null, b: number | null): number | null {
+  if (a == null && b == null) return null
+  return (a ?? 0) + (b ?? 0)
+}
+
 export async function runEvalInBrowser(args: {
   fixtures: LongConsistencyFixture[]
   split: EvalSplit
@@ -256,8 +315,10 @@ export async function runEvalInBrowser(args: {
   }
 
   for (const fixture of args.fixtures) {
-    const built = buildEvalCase(fixture, args.variant)
     const startedAt = performance.now()
+    // 候选变体先从上一章真实正文抽 handoff/摘要（真实管线，不喂答案），再生成。
+    const memory = await extractEvalMemory(fixture, args.variant, args.call, runConfig)
+    const built = buildEvalCase(fixture, args.variant, memory)
     const response = await args.call(built.messages, runConfig)
     const score = args.judge
       ? await args.judge(fixture, response.output, runConfig)
@@ -267,10 +328,11 @@ export async function runEvalInBrowser(args: {
       messages: built.messages,
       productionSnapshot: built.productionSnapshot,
       output: response.output,
-      inputChars: built.inputChars,
-      outputChars: response.output.length,
-      inputTokens: response.usage?.inputTokens ?? null,
-      outputTokens: response.usage?.outputTokens ?? null,
+      // 候选成本诚实计入抽取那次调用（输入正文 + 输出 handoff JSON）。
+      inputChars: built.inputChars + memory.extractionInputChars,
+      outputChars: response.output.length + memory.extractionOutputChars,
+      inputTokens: combineTokens(response.usage?.inputTokens ?? null, memory.extractionInputTokens),
+      outputTokens: combineTokens(response.usage?.outputTokens ?? null, memory.extractionOutputTokens),
       durationMs: Math.round(performance.now() - startedAt),
       score,
     })
