@@ -210,6 +210,24 @@ export default function PromptTemplateEditor({ template, onChanged, onDeleted }:
           )}
         </div>
 
+        {(draft.moduleKey === 'chapter.content' || draft.moduleKey === 'chapter.continue') && (
+          <div className="flex items-center gap-2 text-xs">
+            <label className="text-text-secondary flex-shrink-0">连续性上下文</label>
+            <select
+              value={draft.continuityMode ?? 'inherit'}
+              onChange={e => update({
+                continuityMode: e.target.value as PromptTemplate['continuityMode'],
+              })}
+              disabled={isSystem}
+              className="flex-1 px-2 py-1 bg-bg-base border border-border rounded text-text-primary disabled:opacity-60"
+            >
+              <option value="inherit">继承默认注入</option>
+              <option value="required">强制注入</option>
+              <option value="off">关闭注入</option>
+            </select>
+          </div>
+        )}
+
         {/* 操作按钮 */}
         <div className="flex flex-wrap gap-2 pt-1">
           {!isSystem && (

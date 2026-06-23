@@ -55,7 +55,7 @@
 
 ## 二、上下文源清单（CONTEXT_SOURCES · AI 读什么）
 
-共 22 个上下文源。assembleContext({ sourceKeys }) 按 key 装配。
+共 24 个上下文源。assembleContext({ sourceKeys }) 按 key 装配。
 
 | key | 标签 | 作用域 | 层级 | 预算(token) |
 |---|---|---|---|---|
@@ -65,7 +65,9 @@
 | `chapterOutline` | 当前章节大纲 | node | L1 | 800 |
 | `existingVolumeOutlines` | 已有卷大纲 | project | L1 | 2400 |
 | `detailedOutline` | 本章细纲(场景拆解) | node | L1 | 1500 |
-| `previousChapterEnding` | 上一章结尾 | manual | L1 | 500 |
+| `previousChapterEnding` | 全局直接前驱原文尾部 | manual | L1 | 1800 |
+| `chapterContinuityHandoff` | 全局直接前驱连续性交接 | chapter | L1 | 1600 |
+| `recentChapterSummaries` | 当前世界最近已验证摘要 | chapter | L1 | 2200 |
 | `worldview` | 世界观 | world | L2 | 8000 |
 | `storyCore` | 故事核心 | project | L1 | 4000 |
 | `powerSystem` | 力量体系 | world | L2 | 4000 |
@@ -109,24 +111,24 @@ AI 输出经 `adopt({ target, data })` 写回,只有这里登记的字段可写(
 ## 四、AI 调用点（消耗统计 category · 在哪触发)
 
 共 43 个 category。
-未分类调用: 0 个。动态 category 调用: 1 个。
+未分类调用: 0 个。动态 category 调用: 2 个。
 
 | category | 触发文件 |
 |---|---|
 | `ai.restructure` | `src/lib/ai/restructure.ts:52` |
-| `chapter.content` | `src/components/editor/ChapterEditor.tsx:310` |
+| `chapter.content` | `src/components/editor/ChapterEditor.tsx:397` |
 | `chapter.content.batch` | `src/lib/ai/batch-detail-runner.ts:256` |
-| `chapter.continue` | `src/components/editor/ChapterEditor.tsx:320` |
-| `chapter.deai` | `src/components/editor/ChapterEditor.tsx:356` |
-| `chapter.expand` | `src/components/editor/ChapterEditor.tsx:336` |
-| `chapter.polish` | `src/components/editor/ChapterEditor.tsx:328` |
+| `chapter.continue` | `src/components/editor/ChapterEditor.tsx:415` |
+| `chapter.deai` | `src/components/editor/ChapterEditor.tsx:452` |
+| `chapter.expand` | `src/components/editor/ChapterEditor.tsx:432` |
+| `chapter.memory` | `src/components/editor/ChapterEditor.tsx:235` |
+| `chapter.polish` | `src/components/editor/ChapterEditor.tsx:424` |
 | `chapter.toolbar` | `src/components/editor/FloatingToolbar.tsx:105` |
 | `character.generate` | `src/components/character/CharacterPanel.tsx:146` |
 | `character.structure` | `src/lib/ai/parse-character-output.ts:83` |
 | `codex.extract` | `src/components/codex/CodexPanel.tsx:204` |
 | `detail.scene` | `src/components/outline/DetailedOutlinePanel.tsx:163`<br/>`src/components/outline/ScenePanel.tsx:111`<br/>`src/lib/ai/batch-detail-runner.ts:109` |
 | `emotion.beat` | `src/components/editor/EmotionBeatCard.tsx:66` |
-| `eval.ns0` | `src/components/settings/NS0EvalPanel.tsx:41` |
 | `foreshadow.structure` | `src/components/foreshadow/ForeshadowPanel.tsx:60` |
 | `foreshadow.suggest` | `src/components/foreshadow/ForeshadowPanel.tsx:159` |
 | `geography.concept-map` | `src/components/geography/GeographyPanel.tsx:127` |
@@ -144,7 +146,7 @@ AI 输出经 `adopt({ target, data })` 写回,只有这里登记的字段可写(
 | `review.anti-ai` | `src/components/editor/ReviewPanel.tsx:66` |
 | `review.quality` | `src/components/editor/ReviewPanel.tsx:58` |
 | `review.readability` | `src/components/editor/ReviewPanel.tsx:75` |
-| `review.revise` | `src/components/editor/ChapterEditor.tsx:371` |
+| `review.revise` | `src/components/editor/ChapterEditor.tsx:467` |
 | `rules.generate` | `src/components/rules/CreativeRulesPanel.tsx:80` |
 | `scene.verify` | `src/components/scene/SceneVerifyPanel.tsx:81` |
 | `story-arc.generate` | `src/components/outline/StoryArcPanel.tsx:84` |
@@ -159,8 +161,9 @@ AI 输出经 `adopt({ target, data })` 写回,只有这里登记的字段可写(
 
 ### 动态 category 调用
 
+- `src/components/settings/NS0EvalPanel.tsx:43 · chat`
 - `src/components/settings/prompt/WorkflowRunner.tsx:273 · ai.start`
 
 ---
 
-生成时间基准:commit `8fb943b`
+生成时间基准:commit `23d8fdb`

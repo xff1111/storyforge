@@ -5,6 +5,7 @@ import {
   NS1_ACCEPTANCE_THRESHOLDS,
   aggregateScores,
   buildEvalCase,
+  evaluateNs1Gate,
   runPairedEvalInBrowser,
   scoreOutput,
 } from '../../src/lib/evals/long-consistency/runner'
@@ -15,11 +16,14 @@ describe('NS-0 long-consistency evaluation harness', () => {
       'dev-completion-bell',
       'dev-continuation-wound',
       'dev-expansion-medicine',
-    ])
-    expect(getFixtures('held-out').map(fixture => fixture.id)).toEqual([
       'held-completion-lantern',
       'held-continuation-ink',
       'held-expansion-compass',
+    ])
+    expect(getFixtures('held-out').map(fixture => fixture.id)).toEqual([
+      'held-final-completion-seal',
+      'held-final-continuation-tidelock',
+      'held-final-expansion-mask',
     ])
   })
 
@@ -42,7 +46,7 @@ describe('NS-0 long-consistency evaluation harness', () => {
 
   it('scores deterministic facts, constraints, future leakage, foreign-world leakage and evidence', () => {
     const fixture = {
-      ...getFixtures('held-out')[0],
+      ...getFixtures('development').find(item => item.id === 'held-completion-lantern')!,
       evidenceIds: ['chapter-19:ending'],
     }
     const score = scoreOutput(
@@ -129,5 +133,43 @@ describe('NS-0 long-consistency evaluation harness', () => {
       'natural:handoff-tail-summary',
     ])
     expect(seenMaxTokens).toEqual([1200, 1200, 4096, 4096])
+  })
+
+  it('applies the pre-registered NS-1 gate without post-hoc threshold changes', () => {
+    const makeRecord = (
+      variant: 'legacy-500-tail' | 'handoff-tail-summary',
+      fact: number,
+      constraint: number,
+      inputTokens: number,
+    ) => ({
+      schemaVersion: 1 as const,
+      runId: variant,
+      createdAt: new Date(0).toISOString(),
+      provider: 'agnes',
+      model: 'agnes-1.5-flash',
+      variant,
+      split: 'held-out' as const,
+      budgetMode: 'fixed' as const,
+      configuredMaxTokens: 1200,
+      results: [],
+      aggregate: {
+        caseCount: 3,
+        requiredFactRecall: fact,
+        constraintRecall: constraint,
+        futureLeakageRate: 0,
+        wrongWorldLeakageRate: 0,
+        evidenceCitationRecall: null,
+        estimatedInputTokens: inputTokens,
+        estimatedOutputTokens: 100,
+      },
+    })
+    expect(evaluateNs1Gate(
+      makeRecord('legacy-500-tail', 0.4, 0.5, 1000),
+      makeRecord('handoff-tail-summary', 0.9, 0.9, 1500),
+    )).toEqual({ passed: true, failures: [] })
+    expect(evaluateNs1Gate(
+      makeRecord('legacy-500-tail', 0.8, 0.8, 1000),
+      makeRecord('handoff-tail-summary', 0.84, 0.9, 1700),
+    ).passed).toBe(false)
   })
 })

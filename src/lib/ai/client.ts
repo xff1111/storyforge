@@ -94,6 +94,9 @@ export async function* streamChat(
   if (trimmed.trimmed) {
     console.warn(`[AI] request messages trimmed to fit context window: ${trimmed.totalInputTokens}/${trimmed.inputBudget} tokens`)
   }
+  if (!trimmed.protectedEnvelopePreserved) {
+    throw new Error('当前模型上下文窗口无法容纳最低连续性保护块；请降低输出长度或改用更大上下文模型。')
+  }
   const req = buildRequest(config, trimmed.messages, true)
 
   const log = createLog({
@@ -207,6 +210,9 @@ export async function chat(
   const trimmed = trimMessagesToFit(messages, config.provider, config.model, config.maxTokens, config.contextWindow)
   if (trimmed.trimmed) {
     console.warn(`[AI] request messages trimmed to fit context window: ${trimmed.totalInputTokens}/${trimmed.inputBudget} tokens`)
+  }
+  if (!trimmed.protectedEnvelopePreserved) {
+    throw new Error('当前模型上下文窗口无法容纳最低连续性保护块；请降低输出长度或改用更大上下文模型。')
   }
   const req = buildRequest(config, trimmed.messages, false)
 

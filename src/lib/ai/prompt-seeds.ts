@@ -399,6 +399,7 @@ export const SYSTEM_PROMPT_SEEDS: PromptSeed[] = [
 
 用户额外要求：{{userHint}}{{/if}}`,
     variables: ['chapterTitle', 'chapterSummary', 'worldContext', 'characters', 'previousChapterEnding', 'worldRulesContext', 'userHint'],
+    continuityMode: 'required',
     parameters: [
       {
         key: 'tone',
@@ -456,6 +457,7 @@ export const SYSTEM_PROMPT_SEEDS: PromptSeed[] = [
 
 用户额外要求：{{userHint}}{{/if}}`,
     variables: ['chapterSummary', 'worldContext', 'existingContent', 'userHint'],
+    continuityMode: 'required',
     parameters: [
       { key: 'tone', label: '基调', type: 'select',
         options: ['严肃', '轻松', '幽默', '沉重', '抒情', '紧张', '热血'],

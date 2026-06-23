@@ -1,10 +1,82 @@
 import type { ChatMessage } from '../../types'
 import { usePromptStore } from '../../../stores/prompt'
 import { renderPrompt } from '../prompt-engine'
+import {
+  CONTINUITY_CORE_END,
+  CONTINUITY_CORE_START,
+} from '../chapter-memory/continuity-envelope'
 
 export interface RunOptions {
   parameterValues?: Record<string, unknown>
   overrides?: { systemPrompt?: string; userPromptTemplate?: string }
+  continuity?: {
+    handoff?: string
+    previousTail?: string
+    recentSummaries?: string
+  }
+  continuityBudgetTokens?: number
+  /** 仅用于冻结旧生产基线，正常创作不得设置。 */
+  skipContinuityEnvelope?: boolean
+}
+
+function trimPart(text: string, maxChars: number, keepTail = false): string {
+  if (!text || text.length <= maxChars) return text
+  return keepTail
+    ? `…（前部压缩）\n${text.slice(-maxChars)}`
+    : `${text.slice(0, maxChars)}\n…（后部压缩）`
+}
+
+function buildContinuityEnvelope(args: {
+  task: string
+  continuity?: RunOptions['continuity']
+  currentDraftTail?: string
+  budgetTokens?: number
+}): string {
+  const budget = Math.max(1200, args.budgetTokens ?? 3200)
+  const approxChars = Math.floor(budget * 0.62)
+  const taskChars = Math.max(180, Math.floor(approxChars * 0.15))
+  const handoffChars = Math.max(240, Math.floor(approxChars * 0.2))
+  const tailPoolChars = Math.max(400, Math.floor(approxChars * 0.45))
+  const hasPreviousTail = !!args.continuity?.previousTail
+  const hasCurrentDraftTail = !!args.currentDraftTail
+  const tailCount = Number(hasPreviousTail) + Number(hasCurrentDraftTail)
+  const tailChars = tailCount > 0 ? Math.floor(tailPoolChars / tailCount) : 0
+  const summaryChars = Math.max(180, approxChars - taskChars - handoffChars - tailPoolChars)
+  const parts = [
+    CONTINUITY_CORE_START,
+    `【本章任务与章纲】\n${trimPart(args.task, taskChars)}`,
+  ]
+  if (args.continuity?.handoff) {
+    parts.push(`【直接前驱 handoff】\n${trimPart(args.continuity.handoff, handoffChars)}`)
+  }
+  if (args.continuity?.previousTail) {
+    parts.push(`【直接前驱真实 tail】\n${trimPart(args.continuity.previousTail, tailChars, true)}`)
+  }
+  if (args.currentDraftTail) {
+    parts.push(`【当前正文续写锚点】\n${trimPart(args.currentDraftTail, tailChars, true)}`)
+  }
+  if (args.continuity?.recentSummaries) {
+    parts.push(`【当前世界最近 verified summaries】\n${trimPart(args.continuity.recentSummaries, summaryChars)}`)
+  }
+  parts.push(
+    '篇幅纪律：优先在输出前 60% 完成本章任务终点与全部硬约束，再补充氛围和细节；不得在关键动作完成前耗尽篇幅。',
+    '以上内容是最低连续性约束；不得用未来章或其他世界资料覆盖。',
+    CONTINUITY_CORE_END,
+  )
+  return parts.join('\n\n')
+}
+
+function injectContinuityEnvelope(
+  messages: ChatMessage[],
+  mode: 'inherit' | 'required' | 'off' | undefined,
+  envelope: string,
+): ChatMessage[] {
+  if (mode === 'off') return messages
+  return messages.map((message, index) => (
+    index === messages.length - 1 && message.role === 'user'
+      ? { ...message, content: `${message.content}\n\n${envelope}` }
+      : message
+  ))
 }
 
 export function buildChapterContentPrompt(
@@ -23,11 +95,18 @@ export function buildChapterContentPrompt(
     chapterSummary,
     worldContext: worldContext || '（暂无）',
     characters: characterContext || '（暂无角色设定）',
-    previousChapterEnding: previousChapterEnding || '（这是第一章）',
+    previousChapterEnding: options?.continuity ? '（见文末连续性保护块）' : (previousChapterEnding || '（这是第一章）'),
     worldRulesContext: worldRulesContext || '',
     userHint,
   }, options)
-  return messages
+  const envelope = buildContinuityEnvelope({
+    task: `${chapterTitle}\n${chapterSummary}`,
+    continuity: options?.continuity,
+    budgetTokens: options?.continuityBudgetTokens,
+  })
+  return options?.skipContinuityEnvelope
+    ? messages
+    : injectContinuityEnvelope(messages, tpl.continuityMode, envelope)
 }
 
 export function buildContinuePrompt(
@@ -44,7 +123,15 @@ export function buildContinuePrompt(
     existingContent: existingContent.slice(-3000),
     userHint,
   }, options)
-  return messages
+  const envelope = buildContinuityEnvelope({
+    task: chapterSummary,
+    continuity: options?.continuity,
+    currentDraftTail: existingContent.slice(-1600),
+    budgetTokens: options?.continuityBudgetTokens,
+  })
+  return options?.skipContinuityEnvelope
+    ? messages
+    : injectContinuityEnvelope(messages, tpl.continuityMode, envelope)
 }
 
 export function buildPolishPrompt(text: string, instruction: string, options?: RunOptions): ChatMessage[] {

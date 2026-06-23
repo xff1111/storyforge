@@ -2166,6 +2166,36 @@ NS-2 + NS-4 + NS-5 → NS-6
 - 编辑器采纳生成/续写后先落正文，再执行“状态提取 + 一次 chapter.memory”；手动入口同步升级为“刷新章节记忆”；
 - 验证：T2 adapter `4/4`、T3 单调用/竞态/失败降级 `3/3`、T1 回归 `4/4`，TypeScript 通过。T3 的老书有界惰性补建与生成前降级链仍在后续施工。
 
+#### ✅ NS-1/T3 · 触发、失效与老书兼容完成（2026-06-23 · 待 Claude 审查）
+
+- AI 生成/续写采纳后固定为“状态提取 + 一次 `chapter.memory`”；手动刷新记忆复用同一任务，不增加独立 summary 调用；
+- 手写、粘贴、润色、去 AI 味或后改正文无需另写失效标记：来源 hash 与当前标准化全文不一致时，旧 summary/handoff 自动进入 `stale`，不再注入；
+- 生成前只同步补建全局直接前驱；当前世界最近候选最多再取 4 章串行后台补建，同章 in-flight 去重，禁止启动时全书扫描；
+- 补建直接从 IndexedDB 读取最新正文，避免 React store 旧快照；任何失败都保留真实 tail 稳定降级，不阻断正文生成。
+
+#### ✅ NS-1/T4～T5 · 规范顺序与注册表上下文源完成（2026-06-23 · 待 Claude 审查）
+
+- 新增 `resolveCanonicalChapterSequence()`：以 outline 树 `parentId + 同级 order + id` 为确定性顺序，`Chapter.order` 仅供无大纲孤儿兜底；
+- resolver 返回 orphan / cycle / duplicate sibling order / duplicate chapter mapping / missing outline anomalies；脏树只降级并告警，本阶段不扩张健康报告 UI；
+- `CONTEXT_SOURCES` 新增 `chapterContinuityHandoff`、`recentChapterSummaries`，并把 `previousChapterEnding` 改为全局直接前驱自查源；
+- 同一次 `assembleContext()` 只批量读取一次 outlines / chapters / worldGroups、只解析一次规范序列；直接前驱可跨世界负责转场，最近 5 个 verified summaries 只允许来自当前世界且严格排除未来章；
+- 编辑器生成与续写已统一走三个注册源，删除按 `Chapter.order` 手工寻找上一章的旧路径。
+
+#### ✅ NS-1/T6～T7 · 最小保护与 Prompt 契约完成（2026-06-23 · 待 Claude 审查）
+
+- 生成与续写在最终 user message 尾部只追加一次带边界标记的连续性保护块，顺序固定为：本章任务/章纲 → handoff → 直接前驱真实 tail → 当前续写锚点 → 最近 verified summaries；
+- envelope 按模型窗口分为 8K=`3000`、32K=`6000`、更大窗口=`10000` token target；双 tail 共用固定预算池，不能因续写重复突破声明预算；
+- `assembleContext` 将章纲、handoff、真实 tail 标为不可裁剪；最终 request-side trim 再检查完整边界块，物理窗口放不下时在请求前显式报错，不静默丢失；
+- `PromptTemplate.continuityMode` 已接入类型、seed、store 与编辑器；系统正文/续写模板为 `required`，用户模板默认继承、可显式 `off`；
+- 冻结 legacy runner 可显式跳过 envelope，仅用于基线复现；正常创作不得走该开关；
+- 专项验证：规范顺序/跨世界/未来排除 `4/4`，8K/32K/128K 最终 messages 与模板契约 `7/7`，NS-0/NS-1 runner 与硬门 `7/7`；TypeScript、架构检查通过。
+
+#### ⏳ NS-1/T8 · 最终硬门进行中（2026-06-23）
+
+- 调试期间使用过的旧 held-out 已降级为 development；最终 3 个 held-out 使用新本地存储版本，与开发跑分彻底隔离；
+- 最终盲测 UI 只显示 aggregate 与硬门失败项，不再展开逐例输出；一旦完整 held-out 配对记录落盘即锁定按钮，禁止根据单例结果反复调参；
+- fixed / natural 两档分别执行 `legacy-500-tail` 与 `handoff-tail-summary`，逐例进度可见；结果未达到 §16.4 T8 预注册门槛前，NS-1 不得标记完成。
+
 ---
 
 ## 〆 终

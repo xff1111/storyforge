@@ -7,6 +7,7 @@
 import type { Table } from 'dexie'
 import type { AIProvider } from '../types/ai'
 import type { ContextLayer, ContextSegment } from '../ai/context-budget'
+import type { PreparedContinuityContext } from '../ai/chapter-memory/continuity-context'
 
 /**
  * 表的归属方式 —— 决定删项目时如何定位该表的记录。
@@ -241,6 +242,8 @@ export interface AssembleContextInput {
   extraStateIds?: number[]
   /** 手动输入/当前字段内容，供“内容反推结构化设定”类动作走注册表。 */
   manualSourceText?: string
+  /** assembleContext 内部批量预取；调用方无需传。 */
+  continuitySnapshot?: PreparedContinuityContext
 }
 
 export interface ContextSource {
@@ -250,6 +253,8 @@ export interface ContextSource {
   layer: ContextLayer
   /** Approximate per-source soft cap. Adapters can still return less. */
   budgetTokens: number
+  /** NS-1: assembleContext 总预算裁剪时不得整段删除。 */
+  protectedFromTrim?: boolean
   requiresWorldGroupId?: boolean
   requiresOutlineNodeId?: boolean
   requiresChapterId?: boolean
@@ -266,4 +271,5 @@ export interface AssembleContextResult {
   totalInputTokens: number
   inputBudget: number
   overBudgetBeforeTrim: boolean
+  overBudgetAfterTrim: boolean
 }

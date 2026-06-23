@@ -1,0 +1,111 @@
+import { db } from '../../db/schema'
+import type { ChapterContinuityHandoff } from '../../types'
+import { getChapterDerivedMemoryStatus, normalizeChapterText } from './text-normalization'
+import {
+  resolveCanonicalChapterSequence,
+  type CanonicalChapterEntry,
+  type ChapterSequenceAnomaly,
+} from './canonical-chapter-sequence'
+
+export interface PreparedContinuityContext {
+  current: CanonicalChapterEntry | null
+  predecessor: CanonicalChapterEntry | null
+  previousTailText: string
+  handoffText: string
+  recentSummariesText: string
+  memoryRebuildCandidateIds: number[]
+  anomalies: ChapterSequenceAnomaly[]
+}
+
+function worldLabel(worldGroupId: number | null, names: Map<number, string>): string {
+  return worldGroupId == null ? '默认世界' : (names.get(worldGroupId) ?? `世界#${worldGroupId}`)
+}
+
+function formatHandoff(handoff: ChapterContinuityHandoff): string[] {
+  const lines: string[] = []
+  const scene = handoff.finalScene
+  if (scene.location) lines.push(`结尾地点：${scene.location}`)
+  if (scene.storyTime) lines.push(`结尾时间：${scene.storyTime}`)
+  if (scene.activeCharacters.length) lines.push(`现场角色：${scene.activeCharacters.join('、')}`)
+  if (scene.lastAction) lines.push(`最后动作：${scene.lastAction}`)
+  if (handoff.stateChanges.length) lines.push(`状态变化：${handoff.stateChanges.join('；')}`)
+  if (handoff.knowledgeChanges.length) lines.push(`认知变化：${handoff.knowledgeChanges.join('；')}`)
+  if (handoff.commitments.length) lines.push(`承诺/硬约束：${handoff.commitments.join('；')}`)
+  if (handoff.openLoops.length) lines.push(`未闭环：${handoff.openLoops.join('；')}`)
+  if (handoff.immediateNextIntent) lines.push(`下一步意图：${handoff.immediateNextIntent}`)
+  if (handoff.evidenceQuotes.length) {
+    lines.push(`证据引文：${handoff.evidenceQuotes.slice(0, 6).map(item => `“${item.quote}”`).join('；')}`)
+  }
+  return lines
+}
+
+export async function prepareContinuityContext(args: {
+  projectId: number
+  chapterId: number
+  recentSummaryLimit?: number
+  previousTailChars?: number
+}): Promise<PreparedContinuityContext> {
+  const [outlineNodes, chapters, worldGroups] = await Promise.all([
+    db.outlineNodes.where('projectId').equals(args.projectId).toArray(),
+    db.chapters.where('projectId').equals(args.projectId).toArray(),
+    db.worldGroups.where('projectId').equals(args.projectId).toArray(),
+  ])
+  const resolved = resolveCanonicalChapterSequence(outlineNodes, chapters)
+  const currentIndex = resolved.sequence.findIndex(entry => entry.chapter.id === args.chapterId)
+  const current = currentIndex >= 0 ? resolved.sequence[currentIndex] : null
+  const predecessor = currentIndex > 0 ? resolved.sequence[currentIndex - 1] : null
+  const names = new Map(worldGroups.filter(group => group.id != null).map(group => [group.id!, group.name]))
+  const rebuildIds = new Set<number>()
+
+  let previousTailText = ''
+  let handoffText = ''
+  if (predecessor) {
+    const predecessorWorld = worldLabel(predecessor.worldGroupId, names)
+    const currentWorld = worldLabel(current?.worldGroupId ?? null, names)
+    const crossWorld = predecessor.worldGroupId !== (current?.worldGroupId ?? null)
+    const tail = normalizeChapterText(predecessor.chapter.content || '').slice(-(args.previousTailChars ?? 1200))
+    if (tail) {
+      previousTailText = [
+        `【全局叙事直接前驱原文尾部 · ${predecessorWorld}${crossWorld ? ` → ${currentWorld} 跨世界转场` : ''}】`,
+        tail,
+      ].join('\n')
+    }
+    const status = await getChapterDerivedMemoryStatus(predecessor.chapter)
+    if (status.handoff === 'verified' && predecessor.chapter.continuityHandoff) {
+      handoffText = [
+        `【全局叙事直接前驱交接 · ${predecessorWorld}${crossWorld ? ` → ${currentWorld} 跨世界转场` : ''}】`,
+        ...formatHandoff(predecessor.chapter.continuityHandoff),
+      ].join('\n')
+    } else if (predecessor.chapter.id != null) {
+      rebuildIds.add(predecessor.chapter.id)
+    }
+  }
+
+  const recent: string[] = []
+  if (current) {
+    const sameWorldCandidates = resolved.sequence
+      .slice(0, Math.max(0, currentIndex))
+      .filter(entry => entry.worldGroupId === current.worldGroupId)
+      .slice(-(args.recentSummaryLimit ?? 5))
+    for (const entry of sameWorldCandidates) {
+      const status = await getChapterDerivedMemoryStatus(entry.chapter)
+      if (status.summary === 'verified' && entry.chapter.summary) {
+        recent.push(`- ${entry.outlineNode?.title ?? entry.chapter.title}：${entry.chapter.summary}`)
+      } else if (entry.chapter.id != null) {
+        rebuildIds.add(entry.chapter.id)
+      }
+    }
+  }
+
+  return {
+    current,
+    predecessor,
+    previousTailText,
+    handoffText,
+    recentSummariesText: recent.length
+      ? `【当前世界最近已验证章节摘要 · 旧→新】\n${recent.join('\n')}`
+      : '',
+    memoryRebuildCandidateIds: [...rebuildIds],
+    anomalies: resolved.anomalies,
+  }
+}

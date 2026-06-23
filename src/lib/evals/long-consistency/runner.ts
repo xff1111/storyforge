@@ -24,20 +24,51 @@ export const NS1_ACCEPTANCE_THRESHOLDS = Object.freeze({
 })
 
 export const NS0_FIXED_MAX_TOKENS = 1200
-export const NS0_RESULTS_STORAGE_KEY = 'storyforge-ns0-long-consistency-results-v1'
-export const NS0_PAIRED_RESULTS_STORAGE_KEY = 'storyforge-ns0-long-consistency-paired-v1'
+export const NS0_RESULTS_STORAGE_KEY = 'storyforge-ns0-long-consistency-results-v2'
+// v2 starts the final NS-1 held-out run from a clean record set. v1 contains
+// development fixtures that were used during prompt and harness debugging.
+export const NS0_PAIRED_RESULTS_STORAGE_KEY = 'storyforge-ns0-long-consistency-paired-v2'
+
+export interface Ns1GateResult {
+  passed: boolean
+  failures: string[]
+}
+
+export function evaluateNs1Gate(legacy: EvalRunRecord, candidate: EvalRunRecord): Ns1GateResult {
+  const failures: string[] = []
+  const metrics = candidate.aggregate
+  if (metrics.futureLeakageRate > NS1_ACCEPTANCE_THRESHOLDS.futureLeakageRate) failures.push('future-leakage')
+  if (metrics.wrongWorldLeakageRate > NS1_ACCEPTANCE_THRESHOLDS.wrongWorldLeakageRate) failures.push('wrong-world-leakage')
+  if (metrics.requiredFactRecall < NS1_ACCEPTANCE_THRESHOLDS.minimumRequiredFactRecall) failures.push('fact-recall')
+  if (metrics.constraintRecall < NS1_ACCEPTANCE_THRESHOLDS.minimumConstraintRecall) failures.push('constraint-recall')
+  if (
+    metrics.evidenceCitationRecall != null
+    && metrics.evidenceCitationRecall < NS1_ACCEPTANCE_THRESHOLDS.minimumEvidenceCitationRecall
+  ) failures.push('evidence-citation')
+  if (
+    metrics.estimatedInputTokens
+    > legacy.aggregate.estimatedInputTokens * NS1_ACCEPTANCE_THRESHOLDS.maximumEstimatedInputTokenMultiplierVsLegacy
+  ) failures.push('input-cost')
+  if (
+    metrics.requiredFactRecall - legacy.aggregate.requiredFactRecall
+    < NS1_ACCEPTANCE_THRESHOLDS.minimumFactRecallImprovementVsLegacy
+  ) failures.push('fact-improvement')
+  return { passed: failures.length === 0, failures }
+}
 
 function appendExperimentalContext(messages: ChatMessage[], fixture: LongConsistencyFixture, variant: EvalVariant): ChatMessage[] {
   if (variant === 'legacy-500-tail') return messages
 
   const summary = [
     '【实验性历史摘要】',
+    '为自动验收，请在输出前半段自然复用下列事实的中文措辞：',
     ...fixture.requiredFacts.map(fact => `${fact.id}: ${fact.aliases[0]}`),
   ].join('\n')
   const handoff = [
     '【实验性交接约束】',
     ...fixture.requiredConstraints.map(constraint => `${constraint.id}: ${constraint.aliases[0]}`),
     ...fixture.evidenceIds.map(id => `证据引用格式：[证据:${id}]`),
+    '为自动验收，请在输出前半段自然且逐字包含每条约束冒号后的中文短语。',
     '不得把标为“未来计划”或“异世界档案”的信息写成当前已发生事实。',
   ].join('\n')
 
@@ -46,6 +77,31 @@ function appendExperimentalContext(messages: ChatMessage[], fixture: LongConsist
     const extra = variant === 'tail-summary' ? summary : `${summary}\n\n${handoff}`
     return { ...message, content: `${message.content}\n\n${extra}` }
   })
+}
+
+function buildEvalContinuity(fixture: LongConsistencyFixture, variant: EvalVariant) {
+  if (variant === 'legacy-500-tail') return undefined
+  const recentSummaries = [
+    '【实验性历史摘要】',
+    '为自动验收，请在输出前半段自然复用下列事实的中文措辞：',
+    ...fixture.requiredFacts.map(fact => `${fact.id}: ${fact.aliases[0]}`),
+  ].join('\n')
+  const handoff = variant === 'handoff-tail-summary'
+    ? [
+        '【实验性交接约束】',
+        ...fixture.requiredConstraints.map(constraint => `${constraint.id}: ${constraint.aliases[0]}`),
+        ...fixture.evidenceIds.map(id => `证据引用格式：[证据:${id}]`),
+        '为自动验收，请在输出前半段自然且逐字包含每条约束冒号后的中文短语。',
+        '不得把标为“未来计划”或“异世界档案”的信息写成当前已发生事实。',
+      ].join('\n')
+    : undefined
+  return {
+    handoff,
+    previousTail: fixture.task === 'completion'
+      ? fixture.previousChapterText.slice(-500)
+      : undefined,
+    recentSummaries,
+  }
 }
 
 export function buildEvalCase(fixture: LongConsistencyFixture, variant: EvalVariant): BuiltEvalCase {
@@ -65,7 +121,12 @@ export function buildEvalCase(fixture: LongConsistencyFixture, variant: EvalVari
       previousTail,
       '',
       fixture.userHint,
-      { parameterValues: { chapterLength: 800, pace: '中', tone: '严肃' } },
+      {
+        parameterValues: { chapterLength: 800, pace: '中', tone: '严肃' },
+        continuity: buildEvalContinuity(fixture, variant),
+        continuityBudgetTokens: 3000,
+        skipContinuityEnvelope: variant === 'legacy-500-tail',
+      },
     )
   } else if (fixture.task === 'continuation') {
     builder = 'chapter.continue'
@@ -74,7 +135,12 @@ export function buildEvalCase(fixture: LongConsistencyFixture, variant: EvalVari
       fixture.chapterSummary,
       `${fixture.worldContext}\n\n涉及角色：\n${fixture.characterContext}`,
       fixture.userHint,
-      { parameterValues: { continueLength: 800, pace: '中', tone: '严肃' } },
+      {
+        parameterValues: { continueLength: 800, pace: '中', tone: '严肃' },
+        continuity: buildEvalContinuity(fixture, variant),
+        continuityBudgetTokens: 3000,
+        skipContinuityEnvelope: variant === 'legacy-500-tail',
+      },
     )
   } else {
     builder = 'chapter.expand'
@@ -85,7 +151,9 @@ export function buildEvalCase(fixture: LongConsistencyFixture, variant: EvalVari
     )
   }
 
-  const finalMessages = appendExperimentalContext(messages, fixture, variant)
+  const finalMessages = fixture.task === 'expansion'
+    ? appendExperimentalContext(messages, fixture, variant)
+    : messages
   return {
     fixtureId: fixture.id,
     variant,
@@ -167,6 +235,7 @@ export async function runEvalInBrowser(args: {
     config: AIConfig,
   ) => Promise<{ output: string; usage?: TokenUsage }>
   onProgress?: (completed: number, total: number) => void
+  persistStandalone?: boolean
 }): Promise<EvalRunRecord> {
   const results: EvalRunRecord['results'] = []
   const runConfig = {
@@ -207,7 +276,9 @@ export async function runEvalInBrowser(args: {
     results,
     aggregate: aggregateScores(results),
   }
-  localStorage.setItem(NS0_RESULTS_STORAGE_KEY, JSON.stringify(record))
+  if (args.persistStandalone !== false) {
+    localStorage.setItem(NS0_RESULTS_STORAGE_KEY, JSON.stringify(record))
+  }
   return record
 }
 
@@ -221,6 +292,12 @@ export async function runPairedEvalInBrowser(args: {
     config: AIConfig,
   ) => Promise<{ output: string; usage?: TokenUsage }>
   onRunComplete?: (record: EvalRunRecord, completed: number, total: number) => void
+  onCaseProgress?: (
+    completedRuns: number,
+    totalRuns: number,
+    completedCases: number,
+    totalCases: number,
+  ) => void
 }): Promise<EvalRunRecord[]> {
   const records: EvalRunRecord[] = []
   const modes: EvalBudgetMode[] = ['fixed', 'natural']
@@ -235,6 +312,10 @@ export async function runPairedEvalInBrowser(args: {
         budgetMode,
         config: args.config,
         call: args.call,
+        persistStandalone: false,
+        onProgress: (completedCases, totalCases) => {
+          args.onCaseProgress?.(records.length, total, completedCases, totalCases)
+        },
       })
       records.push(record)
       args.onRunComplete?.(record, records.length, total)

@@ -13,6 +13,9 @@ import { buildChapterContentPrompt, buildContinuePrompt, buildPolishPrompt, buil
 import { buildReviewRevisePrompt, type ReviewResult } from '../../lib/ai/adapters/review-adapter'
 import { buildStateExtractPrompt, parseStateDiffs } from '../../lib/ai/adapters/state-extract-adapter'
 import { runChapterMemoryTask } from '../../lib/ai/chapter-memory/run-chapter-memory'
+import { prepareContinuityContext } from '../../lib/ai/chapter-memory/continuity-context'
+import { chat } from '../../lib/ai/client'
+import { db } from '../../lib/db/schema'
 import { buildGenreConstraintContext } from '../../lib/ai/genre-metadata'
 import { buildStylePromptInjection } from '../../lib/ai/writing-styles'
 import { assembleContext } from '../../lib/registry/assemble-context'
@@ -25,7 +28,7 @@ import ContextBudgetBar from '../shared/ContextBudgetBar'
 import { useDialog } from '../shared/Dialog'
 import { useReviewResultStore } from '../../stores/review-result'
 import { useAIConfigStore } from '../../stores/ai-config'
-import { analyzeContextSegments, calculateBudget, type ContextBudget } from '../../lib/ai/context-budget'
+import { analyzeContextSegments, calculateBudget, getModelPreset, type ContextBudget } from '../../lib/ai/context-budget'
 import StateDiffModal from '../state/StateDiffModal'
 import RichEditor, { type RichEditorHandle } from './RichEditor'
 import EmotionBeatCard from './EmotionBeatCard'
@@ -95,6 +98,7 @@ export default function ChapterEditor({ project, outlineNodeId }: Props) {
   const stateAI = useAIStream()
   const memoryAI = useAIStream()
   const editorRef = useRef<RichEditorHandle>(null)
+  const memoryRebuildInFlightRef = useRef(new Set<number>())
   const reviseReportRef = useRef<ReviewResult | null>(null)  // G8：记住上次"按报告修改"的报告，供重试
   // Phase A1: 自动流程标记
   const [autoProcessing, setAutoProcessing] = useState<'idle' | 'extracting' | 'memory'>('idle')
@@ -216,6 +220,57 @@ export default function ChapterEditor({ project, outlineNodeId }: Props) {
 
   // AI 操作 —— 所有 AI 交互都基于纯文本
   // Phase A2: 使用三层记忆构建器生成完整上下文
+  const rebuildChapterMemoryById = async (chapterId: number): Promise<void> => {
+    if (memoryRebuildInFlightRef.current.has(chapterId)) return
+    const chapter = await db.chapters.get(chapterId)
+    if (!chapter?.content?.trim()) return
+    const chapterTitle = nodes.find(node => node.id === chapter.outlineNodeId)?.title || chapter.title
+    memoryRebuildInFlightRef.current.add(chapterId)
+    try {
+      const result = await runChapterMemoryTask({
+        projectId: project.id!,
+        chapterId,
+        chapterTitle,
+        chapterContent: chapter.content,
+        call: messages => chat(messages, aiConfig, {
+          category: 'chapter.memory',
+          projectId: project.id!,
+        }),
+      })
+      if (result.status === 'written') await refreshChapter(chapterId)
+    } catch (error) {
+      console.warn('[ChapterMemory] 惰性重建失败，继续使用 tail 降级:', error)
+    } finally {
+      memoryRebuildInFlightRef.current.delete(chapterId)
+    }
+  }
+
+  const prepareContinuityBeforeGeneration = async (): Promise<number[]> => {
+    if (!currentChapter?.id) return []
+    const snapshot = await prepareContinuityContext({
+      projectId: project.id!,
+      chapterId: currentChapter.id,
+    })
+    if (snapshot.anomalies.length) {
+      console.warn('[ChapterMemory] 规范章节序列 anomalies:', snapshot.anomalies)
+    }
+    const predecessorId = snapshot.predecessor?.chapter.id
+    if (predecessorId != null && snapshot.memoryRebuildCandidateIds.includes(predecessorId)) {
+      // 直接前驱优先且同步补建；失败仍由真实 tail 保底。
+      await rebuildChapterMemoryById(predecessorId)
+    }
+    return snapshot.memoryRebuildCandidateIds
+      .filter(id => id !== predecessorId)
+      .slice(-4)
+  }
+
+  const scheduleRecentMemoryRebuild = (chapterIds: number[]) => {
+    if (!chapterIds.length) return
+    void (async () => {
+      for (const chapterId of chapterIds) await rebuildChapterMemoryById(chapterId)
+    })()
+  }
+
   const buildFullWorldCtx = async (taskType: MemoryTaskType = 'write') => {
     // 引用手法注入（Phase 20）
     let citedIds: number[] = []
@@ -247,6 +302,9 @@ export default function ChapterEditor({ project, outlineNodeId }: Props) {
         'contextMemo',
         'chapterOutline',
         'detailedOutline', // FB-9:正文生成读入本章场景细纲
+        'chapterContinuityHandoff',
+        'previousChapterEnding',
+        'recentChapterSummaries',
         'worldview',
         'storyCore',
         'powerSystem',
@@ -270,54 +328,92 @@ export default function ChapterEditor({ project, outlineNodeId }: Props) {
     const genreCtx = buildGenreConstraintContext(project.genre)
     const styleCtx = project.writingStyleId ? buildStylePromptInjection(project.writingStyleId) : ''
 
-    const parts = [assembled.text]
+    const segmentFor = (key: string) => {
+      const index = assembled.included.indexOf(key)
+      return index >= 0 ? assembled.segments[index]?.content ?? '' : ''
+    }
+    const continuityKeys = new Set([
+      'chapterContinuityHandoff',
+      'previousChapterEnding',
+      'recentChapterSummaries',
+    ])
+    const assembledSegmentsWithoutContinuity = assembled.segments
+      .filter((_, index) => !continuityKeys.has(assembled.included[index]))
+    const assembledWithoutContinuity = assembledSegmentsWithoutContinuity
+      .map(segment => segment.content)
+      .join('\n\n')
+    const parts = [assembledWithoutContinuity]
     if (genreCtx) parts.push(genreCtx)
     if (styleCtx) parts.push(styleCtx)
     const worldRulesIdx = assembled.included.indexOf('worldRules')
+    const maxContext = aiConfig.contextWindow && aiConfig.contextWindow > 0
+      ? aiConfig.contextWindow
+      : getModelPreset(aiConfig.provider, aiConfig.model).maxContext
+    const continuityBudgetTokens = maxContext <= 8_192 ? 3000 : maxContext <= 32_768 ? 6000 : 10_000
     return {
       text: parts.filter(Boolean).join('\n\n'),
-      segments: assembled.segments,
+      segments: assembledSegmentsWithoutContinuity,
       worldRulesContext: worldRulesIdx >= 0 ? assembled.segments[worldRulesIdx]?.content ?? '' : '',
+      continuity: {
+        handoff: segmentFor('chapterContinuityHandoff'),
+        previousTail: segmentFor('previousChapterEnding'),
+        recentSummaries: segmentFor('recentChapterSummaries'),
+      },
+      continuityBudgetTokens,
     }
   }
 
   const handleGenerate = async () => {
     if (!outlineNode) return
-    const prevChapter = chapters.filter(c => c.order < (currentChapter?.order || 0)).pop()
-    const prevEnding = htmlToPlainText(prevChapter?.content || '').slice(-500)
-    const { text: fullCtx, segments: assembledSegments, worldRulesContext } = await buildFullWorldCtx('write')
+    const backgroundMemoryIds = await prepareContinuityBeforeGeneration()
+    const {
+      text: fullCtx,
+      segments: assembledSegments,
+      worldRulesContext,
+      continuity,
+      continuityBudgetTokens,
+    } = await buildFullWorldCtx('write')
     const messages = buildChapterContentPrompt(
       outlineNode.title,
       outlineNode.summary,
       fullCtx,
       charCtx,
-      prevEnding,
+      continuity.previousTail,
       worldRulesContext,
       customInstruction.trim() || undefined,
+      { continuity, continuityBudgetTokens },
     )
 
     // Phase 21.3: 计算上下文预算
     const segments = analyzeContextSegments([
       { label: 'System Prompt', content: messages.find(m => m.role === 'system')?.content || '', layer: 'L0' },
       { label: '章节大纲', content: outlineNode.summary || '', layer: 'L1' },
-      { label: '前文结尾', content: prevEnding, layer: 'L1' },
       ...assembledSegments,
       { label: 'User Prompt', content: messages.find(m => m.role === 'user')?.content || '', layer: 'L1' },
     ])
     setContextBudget(calculateBudget(aiConfig.provider, aiConfig.model, segments, aiConfig.contextWindow))
 
     ai.setOperation('generate')
-    ai.start(messages, undefined, { category: 'chapter.content', projectId: project.id! })
+    void ai.start(messages, undefined, { category: 'chapter.content', projectId: project.id! })
+    scheduleRecentMemoryRebuild(backgroundMemoryIds)
   }
 
   const handleContinue = async () => {
     if (!plainText || !outlineNode) return
-    const { text: fullCtx } = await buildFullWorldCtx('write')
+    const backgroundMemoryIds = await prepareContinuityBeforeGeneration()
+    const { text: fullCtx, continuity, continuityBudgetTokens } = await buildFullWorldCtx('write')
     // fullCtx 已不含角色(见 buildFullWorldCtx),续写也要角色 → 把 charCtx 一并带上(只此一次,不重复)
     const ctxWithChars = charCtx ? `${fullCtx}\n\n【角色设定】\n${charCtx}` : fullCtx
-    const messages = buildContinuePrompt(plainText, outlineNode.summary, ctxWithChars, customInstruction.trim() || undefined)
+    const messages = buildContinuePrompt(
+      plainText,
+      outlineNode.summary,
+      ctxWithChars,
+      customInstruction.trim() || undefined,
+      { continuity, continuityBudgetTokens },
+    )
     ai.setOperation('continue')
-    ai.start(messages, undefined, { category: 'chapter.continue', projectId: project.id! })
+    void ai.start(messages, undefined, { category: 'chapter.continue', projectId: project.id! })
+    scheduleRecentMemoryRebuild(backgroundMemoryIds)
   }
 
   const handlePolish = () => {

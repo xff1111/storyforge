@@ -135,6 +135,8 @@ export interface PromptTemplate {
   }
   /** 短篇模式标识（短篇 / 中篇 / 长篇）— 影响默认参数 */
   lengthMode?: 'short' | 'medium' | 'long'
+  /** NS-1: 连续性保护块策略。 */
+  continuityMode?: 'inherit' | 'required' | 'off'
 
   createdAt: number
   updatedAt: number
