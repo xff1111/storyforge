@@ -4,6 +4,8 @@
  * 本文件只登记读取源和旧适配器桥接。1.3b 再把生成入口迁移到 assembleContext()。
  */
 import { db } from '../db/schema'
+import { resolveCanonicalChapterSequence } from '../ai/chapter-memory/canonical-chapter-sequence'
+import { getFactPredicate } from './fact-predicate-registry'
 import {
   buildCreativeRulesContext,
   buildHistoricalContext,
@@ -209,6 +211,43 @@ async function readCharacterRelations(projectId: number): Promise<string> {
   ].join('\n')
 }
 
+/**
+ * NS-4 · 当前有效事实投影（事实账本 → 生成上下文）。
+ * 只注入 confirmed（Canon）事实，按【规范章序】实时解析 validFrom/To（绝不缓存 order）判定"截止本章是否有效"，
+ * 并按当前世界（∪ 默认 null 世界）过滤。这是事实账本改善长期一致性的回报通道。
+ */
+async function readCurrentFacts(projectId: number, chapterId?: number | null, worldGroupId?: number | null): Promise<string> {
+  if (chapterId == null) return ''
+  const [facts, outlineNodes, chapters] = await Promise.all([
+    db.temporalFacts.where('projectId').equals(projectId).filter(f => f.status === 'confirmed').toArray(),
+    db.outlineNodes.where('projectId').equals(projectId).toArray(),
+    db.chapters.where('projectId').equals(projectId).toArray(),
+  ])
+  if (!facts.length) return ''
+  const { sequence } = resolveCanonicalChapterSequence(outlineNodes, chapters)
+  const orderOf = new Map<number, number>()
+  sequence.forEach((entry, i) => { if (entry.chapter.id != null) orderOf.set(entry.chapter.id, i) })
+  const currentOrder = orderOf.get(chapterId)
+  if (currentOrder == null) return ''
+
+  const validNow = facts.filter(fact => {
+    if (fact.worldGroupId != null && fact.worldGroupId !== (worldGroupId ?? null)) return false // 世界隔离
+    const from = fact.validFromChapterId != null ? orderOf.get(fact.validFromChapterId) : -1
+    if (from == null || from > currentOrder) return false   // 引用不存在的章 / 尚未生效
+    if (fact.validToChapterId != null) {
+      const to = orderOf.get(fact.validToChapterId)
+      if (to != null && to <= currentOrder) return false     // 已失效
+    }
+    return true
+  })
+  if (!validNow.length) return ''
+  const lines = validNow.slice(0, 80).map(fact => {
+    const spec = getFactPredicate(fact.predicate)
+    return `- ${fact.subjectName}｜${spec?.label ?? fact.predicate}：${fact.value}`
+  })
+  return ['【当前有效事实（截止本章·已确认，请勿与之矛盾）】', ...lines].join('\n')
+}
+
 export const CONTEXT_SOURCES: ContextSource[] = [
   {
     key: 'manualText',
@@ -256,6 +295,15 @@ export const CONTEXT_SOURCES: ContextSource[] = [
     layer: 'L1',
     budgetTokens: 2400,
     read: input => readExistingVolumeOutlines(input.projectId),
+  },
+  {
+    key: 'currentFacts',
+    label: '当前有效事实(事实账本投影)',
+    scope: 'chapter',
+    layer: 'L1',
+    budgetTokens: 2000,
+    requiresChapterId: true,
+    read: input => readCurrentFacts(input.projectId, input.chapterId, input.worldGroupId),
   },
   {
     key: 'detailedOutline',
