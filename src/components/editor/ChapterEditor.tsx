@@ -336,6 +336,7 @@ export default function ChapterEditor({ project, outlineNodeId }: Props) {
         'storyArcs',
         'emotionBeats',
         'stateCards',
+        'currentFacts', // NS-4:当前章生效的已确认事实，回注生成防止前后矛盾
         'references',
         'userStyleProfile',
       ],
