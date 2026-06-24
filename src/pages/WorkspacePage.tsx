@@ -55,6 +55,7 @@ const CharacterDrivenPlotPanel = lazy(() => import('../components/outline/Charac
 const InspirationPanel = lazy(() => import('../components/project/InspirationPanel'))
 const LocationPanel = lazy(() => import('../components/location/LocationPanel'))
 const InventoryPanel = lazy(() => import('../components/items/InventoryPanel'))
+const FactLibraryPanel = lazy(() => import('../components/facts/FactLibraryPanel'))
 const StoryTimelinePanel = lazy(() => import('../components/timeline/StoryTimelinePanel'))
 const SceneVerifyPanel = lazy(() => import('../components/scene/SceneVerifyPanel'))
 const WorldGroupOverview = lazy(() => import('../components/world-group/WorldGroupOverview'))
@@ -237,6 +238,8 @@ export default function WorkspacePage() {
         return <StatePanel project={project} />
       case 'inventory':
         return <InventoryPanel project={project} />
+      case 'fact-library':
+        return <FactLibraryPanel project={project} />
       case 'story-timeline':
         return <StoryTimelinePanel
           project={project}

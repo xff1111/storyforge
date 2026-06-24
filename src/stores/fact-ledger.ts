@@ -17,8 +17,8 @@ interface FactLedgerStore {
   loading: boolean
   load: (projectId: number) => Promise<void>
   adopt: (args: { projectId: number; sourceChapterId: number; worldGroupId?: number | null; candidates: ExtractedFactCandidate[] }) => Promise<number>
-  confirm: (projectId: number, factId: number) => Promise<void>
-  reject: (projectId: number, factId: number) => Promise<void>
+  confirmFact: (projectId: number, factId: number) => Promise<void>
+  rejectFact: (projectId: number, factId: number) => Promise<void>
 }
 
 export const useFactLedgerStore = create<FactLedgerStore>((set, get) => ({
@@ -40,12 +40,12 @@ export const useFactLedgerStore = create<FactLedgerStore>((set, get) => ({
     return result.written
   },
 
-  confirm: async (projectId, factId) => {
+  confirmFact: async (projectId, factId) => {
     await confirmFactCandidate(factId)
     await get().load(projectId)
   },
 
-  reject: async (projectId, factId) => {
+  rejectFact: async (projectId, factId) => {
     await rejectFactCandidate(factId)
     await get().load(projectId)
   },
