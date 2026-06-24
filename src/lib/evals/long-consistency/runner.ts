@@ -400,6 +400,9 @@ export async function runPairedEvalInBrowser(args: {
         },
       })
       records.push(record)
+      // 逐条持久化：agnes 免费版慢 + 面板卸载/超时易中断整轮，每完成一个变体就落盘，
+      // 中断也保住已完成的，避免整轮白跑。
+      localStorage.setItem(NS0_PAIRED_RESULTS_STORAGE_KEY, JSON.stringify(records))
       args.onRunComplete?.(record, records.length, total)
     }
   }

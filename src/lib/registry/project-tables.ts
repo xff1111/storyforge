@@ -167,6 +167,33 @@ export const PROJECT_TABLES: TableSpec[] = [
   { table: db.userStyleProfiles, name: 'userStyleProfiles', owner: 'project', exportable: true,
     note: '每项目一份 AI 文风画像;projectId 单例' },
 
+  // ───────────────────── NS-4 时序事实账本 ─────────────────────
+  // 导出/导入：全部分类型 FK + 三个章节引用 + 自引用 supersedesFactId 都做 exportRemap，
+  //   未映射（引用的实体/章已不在导出内）默认置 null，事实不丢、引用不悬空。
+  // 项目级删除：owner:'project' 自动覆盖。
+  // ⚠️ 待办（§14.6 数据红线，下一专注步；表当前为空、无孤儿风险）：实体/章节【单独删除】时的
+  //    事实重映射——删主体级联、删源章降级候选、validFrom/To 指向被删章按相邻有效章重解析，
+  //    需在被引用目标表登记 refs + 自定义重解析，夹具先行，不在本步草率添加。
+  { table: db.temporalFacts, name: 'temporalFacts', owner: 'project', worldScoped: true,
+    exportable: true, exportIdField: true,
+    defaults: { status: 'candidate', locked: false },
+    exportRemap: [
+      { field: 'worldGroupId', remapVia: 'worldGroups', exportAs: '_wgExportId' },
+      { field: 'characterId', remapVia: 'characters', exportAs: '_charExportId' },
+      { field: 'locationId', remapVia: 'importantLocations', exportAs: '_locExportId' },
+      { field: 'storyArcId', remapVia: 'storyArcs', exportAs: '_arcExportId' },
+      { field: 'subjectWorldGroupId', remapVia: 'worldGroups', exportAs: '_subjWgExportId' },
+      { field: 'codexEntryId', remapVia: 'codexEntries', exportAs: '_codexExportId' },
+      { field: 'objectCharacterId', remapVia: 'characters', exportAs: '_objCharExportId' },
+      { field: 'objectLocationId', remapVia: 'importantLocations', exportAs: '_objLocExportId' },
+      { field: 'objectCodexEntryId', remapVia: 'codexEntries', exportAs: '_objCodexExportId' },
+      { field: 'sourceChapterId', remapVia: 'chapters', exportAs: '_srcChapExportId' },
+      { field: 'validFromChapterId', remapVia: 'chapters', exportAs: '_vFromChapExportId' },
+      { field: 'validToChapterId', remapVia: 'chapters', exportAs: '_vToChapExportId' },
+      { field: 'supersedesFactId', remapVia: 'temporalFacts', selfTree: true, exportAs: '_supersedesExportId' },
+    ],
+    note: 'NS-4 时序事实；candidate=observation/confirmed=canon；时序只存 chapterId 不缓存 order' },
+
   // ───────────────────── 多世界 ─────────────────────
   { table: db.worldGroups, name: 'worldGroups', owner: 'project', exportable: true,
     exportIdField: true, exportOrderBy: 'order',

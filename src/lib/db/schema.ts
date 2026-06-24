@@ -42,6 +42,7 @@ import type {
   CodexEntry,
 } from '../types'
 import type { AIUsageEntry } from '../ai/usage-log'
+import type { TemporalFact } from '../types/temporal-fact'
 
 class StoryForgeDB extends Dexie {
   projects!: Table<Project>
@@ -115,6 +116,9 @@ class StoryForgeDB extends Dexie {
 
   // AI 消耗统计
   aiUsageLog!: Table<AIUsageEntry, number>
+
+  // NS-4 —— 时序事实账本（双层事实记忆：status candidate=Evidence Observation / confirmed=Canon Assertion）
+  temporalFacts!: Table<TemporalFact, number>
 
   constructor() {
     super('storyforge')
@@ -336,6 +340,12 @@ class StoryForgeDB extends Dexie {
       await tx.table('outlineNodes').toCollection().modify((node: any) => {
         if (node.summary == null) node.summary = ''
       })
+    })
+
+    // v35: NS-4 时序事实账本。仅新增空表（纯加表，不转换存量数据）。
+    // stateCards → TemporalFact 候选的零丢失转换迁移单列、夹具先行，不在本版做。
+    this.version(35).stores({
+      temporalFacts: '++id, projectId, worldGroupId, characterId, locationId, codexEntryId, predicate, status, sourceChapterId',
     })
   }
 }

@@ -34,6 +34,7 @@ export const REQUIRED_TABLES = [
   'storyArcs',
   'storyCores',
   'storyTimelineEvents',
+  'temporalFacts',
   'userStyleProfiles',
   'worldGroupLinks',
   'worldGroups',

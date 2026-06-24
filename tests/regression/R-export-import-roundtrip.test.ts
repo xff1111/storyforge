@@ -176,4 +176,30 @@ describe('R-roundtrip · 全量内容导出→导入往返', () => {
     const detail = await db.detailedOutlines.where('projectId').equals(id3).first()
     expect(detail?.scenes?.[0]?.title).toBe('废墟苏醒')
   })
+
+  it('NS-4 temporalFacts 往返:分类型 FK(character/chapter/worldGroup)重映射到新项目实体', async () => {
+    const pid = await db.projects.add({ name: '事实往返', genre: 'fantasy', description: '', targetWordCount: 0, enableMultiWorld: false, createdAt: now, updatedAt: now } as any) as number
+    const wgId = await db.worldGroups.add({ projectId: pid, name: '主世界', type: 'main', order: 0, createdAt: now, updatedAt: now } as any) as number
+    const charId = await db.characters.add({ projectId: pid, name: '秦弦', role: 'protagonist', createdAt: now, updatedAt: now } as any) as number
+    const nodeId = await db.outlineNodes.add({ projectId: pid, parentId: null, type: 'chapter', title: '第1章', summary: '', order: 0, createdAt: now, updatedAt: now } as any) as number
+    const chapId = await db.chapters.add({ projectId: pid, outlineNodeId: nodeId, title: '第1章', content: '<p>正文</p>', wordCount: 2, status: 'draft', order: 0, notes: '', createdAt: now, updatedAt: now } as any) as number
+    await db.temporalFacts.add({ projectId: pid, worldGroupId: wgId, characterId: charId, subjectName: '秦弦', predicate: 'powerStage', factKind: 'state', value: '金丹', sourceType: 'chapter', sourceChapterId: chapId, validFromChapterId: chapId, status: 'confirmed', locked: false, createdAt: now, updatedAt: now } as any)
+
+    const exported = await exportProjectJSON(pid)
+    const newId = await importProjectJSON(exported)
+
+    const facts = await db.temporalFacts.where('projectId').equals(newId).toArray()
+    expect(facts.length).toBe(1)
+    const f = facts[0]
+    const newChar = await db.characters.where('projectId').equals(newId).first()
+    const newChap = await db.chapters.where('projectId').equals(newId).first()
+    const newWg = await db.worldGroups.where('projectId').equals(newId).first()
+    expect(f.value).toBe('金丹')                  // 内容不丢
+    expect(f.predicate).toBe('powerStage')
+    expect(f.characterId).toBe(newChar!.id)       // 角色 FK 重映射到新项目
+    expect(f.characterId).not.toBe(charId)
+    expect(f.sourceChapterId).toBe(newChap!.id)   // 源章节 FK 重映射
+    expect(f.validFromChapterId).toBe(newChap!.id)
+    expect(f.worldGroupId).toBe(newWg!.id)        // 世界组 FK 重映射
+  })
 })

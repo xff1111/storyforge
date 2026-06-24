@@ -166,9 +166,9 @@ AI 输出经 `adopt({ target, data })` 写回,只有这里登记的字段可写(
 ### 动态 category 调用
 
 - `src/components/editor/ReviewPanel.tsx:121 · ai.start`
-- `src/components/settings/NS0EvalPanel.tsx:48 · chat`
+- `src/components/settings/NS0EvalPanel.tsx:49 · chat`
 - `src/components/settings/prompt/WorkflowRunner.tsx:273 · ai.start`
 
 ---
 
-生成时间基准:commit `c1d42bb`
+生成时间基准:commit `eadcf12`
