@@ -12,6 +12,8 @@ import { useBeforeUnload } from '../../hooks/useBeforeUnload'
 import { buildChapterContentPrompt, buildContinuePrompt, buildPolishPrompt, buildExpandPrompt, buildDeAIPrompt } from '../../lib/ai/adapters/chapter-adapter'
 import { buildReviewRevisePrompt, type ReviewResult } from '../../lib/ai/adapters/review-adapter'
 import { buildStateExtractPrompt, parseStateDiffs } from '../../lib/ai/adapters/state-extract-adapter'
+import { buildFactExtractPrompt, parseFactExtractResult } from '../../lib/ai/adapters/fact-extract-adapter'
+import { useFactLedgerStore } from '../../stores/fact-ledger'
 import { runChapterMemoryTask } from '../../lib/ai/chapter-memory/run-chapter-memory'
 import { prepareContinuityContext } from '../../lib/ai/chapter-memory/continuity-context'
 import { isPlanReconciliationCurrent } from '../../lib/ai/chapter-memory/plan-reconciliation'
@@ -87,6 +89,7 @@ export default function ChapterEditor({ project, outlineNodeId }: Props) {
   const [showContext, setShowContext] = useState(false)
   const [customInstruction, setCustomInstruction] = useState('')
   const [extracting, setExtracting] = useState(false)
+  const [extractingFacts, setExtractingFacts] = useState(false)
   const [pendingDiffs, setPendingDiffs] = useState<StateDiffItem[] | null>(null)
   // A2: 按需召回 — 手动额外勾选/取消的状态卡 ID
   const [extraStateIds, setExtraStateIds] = useState<number[]>([])
@@ -98,6 +101,7 @@ export default function ChapterEditor({ project, outlineNodeId }: Props) {
   ))
   const stateAI = useAIStream()
   const memoryAI = useAIStream()
+  const factAI = useAIStream()
   const editorRef = useRef<RichEditorHandle>(null)
   const memoryRebuildInFlightRef = useRef(new Set<number>())
   const reviseReportRef = useRef<ReviewResult | null>(null)  // G8：记住上次"按报告修改"的报告，供重试
@@ -507,6 +511,30 @@ export default function ChapterEditor({ project, outlineNodeId }: Props) {
     }
   }
 
+  // NS-4：从本章正文抽取事实候选，走 fact-ledger 单一入口写回（不裸写）。
+  const handleExtractFacts = async () => {
+    if (!currentChapter?.id || !plainText) return
+    setExtractingFacts(true)
+    try {
+      const chapterTitle = outlineNode?.title || currentChapter.title || '未知章节'
+      const messages = buildFactExtractPrompt({ chapterTitle, chapterContent: plainText })
+      const raw = await factAI.start(messages, undefined, { category: 'fact.extract', projectId: project.id! })
+      const candidates = parseFactExtractResult({ raw, chapterContent: plainText })
+      const written = await useFactLedgerStore.getState().adopt({
+        projectId: project.id!,
+        sourceChapterId: currentChapter.id,
+        worldGroupId: chapterWorldGroupId ?? null,
+        candidates,
+      })
+      console.log(`[FactExtract] 抽取 ${candidates.length} 条，写入候选 ${written} 条`)
+    } catch (err) {
+      console.error('[FactExtract] 失败:', err)
+    } finally {
+      factAI.reset()
+      setExtractingFacts(false)
+    }
+  }
+
   const handleAcceptDiffs = async (accepted: StateDiffItem[]) => {
     try {
       await applyDiffs(project.id!, accepted, currentChapter?.id)
@@ -844,6 +872,12 @@ export default function ChapterEditor({ project, outlineNodeId }: Props) {
           className="flex items-center gap-1 px-3 py-1.5 bg-emerald-500/10 text-emerald-400 text-xs rounded-md hover:bg-emerald-500/20 disabled:opacity-50 transition-colors">
           <ClipboardList className="w-3 h-3" />
           {extracting ? '提取中...' : '提取状态'}
+        </button>
+        <button onClick={handleExtractFacts} disabled={factAI.isStreaming || extractingFacts || !plainText}
+          title="NS-4：AI 从本章正文抽取受控事实，落入事实账本候选（作者确认后注回后续生成，长期一致性）"
+          className="flex items-center gap-1 px-3 py-1.5 bg-sky-500/10 text-sky-400 text-xs rounded-md hover:bg-sky-500/20 disabled:opacity-50 transition-colors">
+          <ClipboardList className="w-3 h-3" />
+          {extractingFacts ? '抽取中...' : '提取事实'}
         </button>
         {outlineNodeId && (
           <button onClick={() => setShowOutlinePreview(!showOutlinePreview)}
