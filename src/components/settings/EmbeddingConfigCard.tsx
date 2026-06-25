@@ -11,6 +11,14 @@ import { ensureChunkEmbeddings } from '../../lib/retrieval/retrieval'
 import { isEmbeddingReady } from '../../lib/ai/adapters/embedding-adapter'
 import type { EmbeddingConfig } from '../../lib/types'
 
+// 本地代理 ↔ 直连 地址对（与聊天配置同套路：本地运行用代理绕 CORS，线上部署用直连）。
+const PROXY_PAIRS: Array<{ proxy: string; direct: string }> = [
+  { proxy: '/siliconflow-proxy/v1', direct: 'https://api.siliconflow.cn/v1' },
+  { proxy: '/qwen-proxy/compatible-mode/v1', direct: 'https://dashscope.aliyuncs.com/compatible-mode/v1' },
+  { proxy: '/glm-proxy/api/paas/v4', direct: 'https://open.bigmodel.cn/api/paas/v4' },
+  { proxy: '/openai-proxy/v1', direct: 'https://api.openai.com/v1' },
+]
+
 // baseUrl 默认走本地代理路径（绕浏览器 CORS，本地运行工具时生效；线上部署需改直连且服务商允许跨域）。
 const PRESETS: Array<{ label: string; note: string; cfg: Partial<EmbeddingConfig> }> = [
   { label: '硅基流动 · bge-m3', note: '无需显卡 · 国内可用 · 有免费额度(推荐)', cfg: { provider: 'custom', baseUrl: '/siliconflow-proxy/v1', model: 'BAAI/bge-m3' } },
@@ -79,6 +87,22 @@ export default function EmbeddingConfigCard() {
               <label className="block text-xs text-text-secondary mb-1">Base URL</label>
               <input type="text" value={embedding.baseUrl} onChange={e => setEmbeddingConfig({ baseUrl: e.target.value })}
                 className="w-full px-3 py-1.5 bg-bg-base border border-border rounded text-text-primary text-xs focus:outline-none focus:border-accent" />
+              {(() => {
+                const pair = PROXY_PAIRS.find(p => embedding.baseUrl === p.proxy || embedding.baseUrl === p.direct)
+                if (!pair) return null
+                const isProxy = embedding.baseUrl === pair.proxy
+                return isProxy ? (
+                  <button onClick={() => setEmbeddingConfig({ baseUrl: pair.direct })}
+                    className="mt-1 text-[11px] px-2 py-1 rounded bg-blue-500/10 text-blue-400 hover:bg-blue-500/20 transition-colors">
+                    🔗 切换到直连(线上部署用)
+                  </button>
+                ) : (
+                  <button onClick={() => setEmbeddingConfig({ baseUrl: pair.proxy })}
+                    className="mt-1 text-[11px] px-2 py-1 rounded bg-amber-500/10 text-amber-400 hover:bg-amber-500/20 transition-colors">
+                    🔄 切换到本地代理(本地运行用)
+                  </button>
+                )
+              })()}
             </div>
             <div>
               <label className="block text-xs text-text-secondary mb-1">嵌入模型</label>
