@@ -29,6 +29,7 @@ export const REQUIRED_TABLES = [
   'promptWorkflows',
   'referenceChunkAnalysis',
   'references',
+  'retrievalChunks',
   'snapshots',
   'stateCards',
   'storyArcs',

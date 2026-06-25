@@ -43,6 +43,7 @@ import type {
 } from '../types'
 import type { AIUsageEntry } from '../ai/usage-log'
 import type { TemporalFact } from '../types/temporal-fact'
+import type { RetrievalChunk } from '../types/retrieval-chunk'
 
 class StoryForgeDB extends Dexie {
   projects!: Table<Project>
@@ -119,6 +120,9 @@ class StoryForgeDB extends Dexie {
 
   // NS-4 —— 时序事实账本（双层事实记忆：status candidate=Evidence Observation / confirmed=Canon Assertion）
   temporalFacts!: Table<TemporalFact, number>
+
+  // NS-5 —— 叙事感知混合检索块（可重建派生缓存，不导出）
+  retrievalChunks!: Table<RetrievalChunk, number>
 
   constructor() {
     super('storyforge')
@@ -346,6 +350,11 @@ class StoryForgeDB extends Dexie {
     // stateCards → TemporalFact 候选的零丢失转换迁移单列、夹具先行，不在本版做。
     this.version(35).stores({
       temporalFacts: '++id, projectId, worldGroupId, characterId, locationId, codexEntryId, predicate, status, sourceChapterId',
+    })
+
+    // v36: NS-5 检索块（可重建派生缓存，从章节正文切块）。新增空表，不转换存量数据。
+    this.version(36).stores({
+      retrievalChunks: '++id, projectId, worldGroupId, sourceChapterId',
     })
   }
 }

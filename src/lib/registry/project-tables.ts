@@ -194,6 +194,13 @@ export const PROJECT_TABLES: TableSpec[] = [
     ],
     note: 'NS-4 时序事实；candidate=observation/confirmed=canon；时序只存 chapterId 不缓存 order' },
 
+  // ───────────────────── NS-5 检索块（可重建派生缓存） ─────────────────────
+  // exportable:false —— 从章节正文切块而来、含大体积向量，是可重建缓存，不进 JSON 备份；
+  // 导入后由 chapter 正文重建。项目级删除由 owner 覆盖；删章/改章触发该章块重建（在 chunk 写入层处理）。
+  { table: db.retrievalChunks, name: 'retrievalChunks', owner: 'project', worldScoped: true,
+    exportable: false,
+    note: 'NS-5 检索块·可重建派生缓存(关键词+可选 embedding)，不导出，导入后从正文重建' },
+
   // ───────────────────── 多世界 ─────────────────────
   { table: db.worldGroups, name: 'worldGroups', owner: 'project', exportable: true,
     exportIdField: true, exportOrderBy: 'order',
