@@ -46,6 +46,30 @@
   --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.4);
   --shadow-md: 0 6px 24px rgba(139, 62, 31, 0.35);
   --shadow-lg: 0 16px 64px rgba(139, 62, 31, 0.5);
+
+  --editor-page-bg: #2A1A12;
+  --editor-ruled-line: rgba(200, 161, 85, 0.13);
+  --editor-selection-bg: rgba(217, 119, 87, 0.34);
+  --editor-selection-text: #FFF7ED;
+
+  --editor-ink-primary: #F5E6D3;
+  --editor-ink-strong: #FFFFFF;
+  --editor-ink-cream: #F5E6D3;
+  --editor-ink-muted: #D6B98C;
+  --editor-ink-gold: #FACC15;
+  --editor-ink-orange: #FB923C;
+  --editor-ink-red: #F87171;
+  --editor-ink-blue: #93C5FD;
+  --editor-ink-green: #86EFAC;
+  --editor-ink-purple: #C4B5FD;
+
+  --editor-mark-yellow: #6B4E10;
+  --editor-mark-red: #5A1F1F;
+  --editor-mark-blue: #1E3A5F;
+  --editor-mark-green: #14532D;
+  --editor-mark-purple: #3B2A63;
+  --editor-mark-brown: #4A3326;
+  --editor-mark-ink: #3A2418;
 }
 
 /* ============================================================
@@ -78,6 +102,30 @@
   --shadow-sm: 0 1px 3px rgba(60, 38, 10, 0.10);
   --shadow-md: 0 4px 16px rgba(60, 38, 10, 0.12);
   --shadow-lg: 0 8px 32px rgba(60, 38, 10, 0.15);
+
+  --editor-page-bg: #F8EFD2;
+  --editor-ruled-line: rgba(60, 38, 10, 0.10);
+  --editor-selection-bg: rgba(123, 58, 26, 0.28);
+  --editor-selection-text: #1E1208;
+
+  --editor-ink-primary: #1E1208;
+  --editor-ink-strong: #090604;
+  --editor-ink-cream: #6A3D12;
+  --editor-ink-muted: #775A24;
+  --editor-ink-gold: #8A5B00;
+  --editor-ink-orange: #A94716;
+  --editor-ink-red: #A11E1E;
+  --editor-ink-blue: #184B8A;
+  --editor-ink-green: #1C6B35;
+  --editor-ink-purple: #6B3FA0;
+
+  --editor-mark-yellow: #FFE36A;
+  --editor-mark-red: #FFD2CC;
+  --editor-mark-blue: #CFE4FF;
+  --editor-mark-green: #CFEFD9;
+  --editor-mark-purple: #E6D8FF;
+  --editor-mark-brown: #E8DAB0;
+  --editor-mark-ink: #D8BE7A;
 }
 
 /* ============================================================
@@ -93,8 +141,8 @@
   --text-secondary: #56503F;
   --text-muted: #8A7E6A;
 
-  --accent: #B85C3F;
-  --accent-hover: #A04E35;
+  --accent: #A04E35;
+  --accent-hover: #8E442E;
   --accent-muted: #D6A86C;
 
   --success: #16A34A;
@@ -110,6 +158,30 @@
   --shadow-sm: 0 1px 2px rgba(31, 27, 22, 0.04);
   --shadow-md: 0 4px 12px rgba(31, 27, 22, 0.08);
   --shadow-lg: 0 12px 40px rgba(31, 27, 22, 0.10);
+
+  --editor-page-bg: #FFFDF7;
+  --editor-ruled-line: rgba(31, 27, 22, 0.08);
+  --editor-selection-bg: rgba(37, 99, 235, 0.20);
+  --editor-selection-text: #111827;
+
+  --editor-ink-primary: #1F1B16;
+  --editor-ink-strong: #050505;
+  --editor-ink-cream: #7A4A1F;
+  --editor-ink-muted: #725A32;
+  --editor-ink-gold: #8A5B00;
+  --editor-ink-orange: #B54708;
+  --editor-ink-red: #B91C1C;
+  --editor-ink-blue: #1D4ED8;
+  --editor-ink-green: #15803D;
+  --editor-ink-purple: #7E22CE;
+
+  --editor-mark-yellow: #FFE45C;
+  --editor-mark-red: #FFD6D6;
+  --editor-mark-blue: #D7E8FF;
+  --editor-mark-green: #D8F5DF;
+  --editor-mark-purple: #EAD7FF;
+  --editor-mark-brown: #F1E7D4;
+  --editor-mark-ink: #E9DEC8;
 }
 
 /* ============================================================
@@ -124,6 +196,11 @@
   --success: #4ADE80; --warning: #FBBF24; --error: #EF4444; --info: #60A5FA;
   --border: rgba(200,161,85,0.22); --border-hover: rgba(200,161,85,0.40);
   --accent-soft: rgba(217,119,87,0.18); --border-subtle: rgba(200,161,85,0.12);
+  --editor-page-bg: #2A1A12; --editor-ruled-line: rgba(200,161,85,0.13);
+  --editor-selection-bg: rgba(217,119,87,0.34); --editor-selection-text: #FFF7ED;
+  --editor-ink-primary: #F5E6D3; --editor-ink-strong: #FFFFFF; --editor-ink-cream: #F5E6D3; --editor-ink-muted: #D6B98C;
+  --editor-ink-gold: #FACC15; --editor-ink-orange: #FB923C; --editor-ink-red: #F87171; --editor-ink-blue: #93C5FD; --editor-ink-green: #86EFAC; --editor-ink-purple: #C4B5FD;
+  --editor-mark-yellow: #6B4E10; --editor-mark-red: #5A1F1F; --editor-mark-blue: #1E3A5F; --editor-mark-green: #14532D; --editor-mark-purple: #3B2A63; --editor-mark-brown: #4A3326; --editor-mark-ink: #3A2418;
 }
 
 [data-theme="ocean"],
@@ -135,6 +212,11 @@
   --success: #4ADE80; --warning: #FBBF24; --error: #EF4444; --info: #60A5FA;
   --border: rgba(200,161,85,0.22); --border-hover: rgba(200,161,85,0.40);
   --accent-soft: rgba(217,119,87,0.18);
+  --editor-page-bg: #2A1A12; --editor-ruled-line: rgba(200,161,85,0.13);
+  --editor-selection-bg: rgba(217,119,87,0.34); --editor-selection-text: #FFF7ED;
+  --editor-ink-primary: #F5E6D3; --editor-ink-strong: #FFFFFF; --editor-ink-cream: #F5E6D3; --editor-ink-muted: #D6B98C;
+  --editor-ink-gold: #FACC15; --editor-ink-orange: #FB923C; --editor-ink-red: #F87171; --editor-ink-blue: #93C5FD; --editor-ink-green: #86EFAC; --editor-ink-purple: #C4B5FD;
+  --editor-mark-yellow: #6B4E10; --editor-mark-red: #5A1F1F; --editor-mark-blue: #1E3A5F; --editor-mark-green: #14532D; --editor-mark-purple: #3B2A63; --editor-mark-brown: #4A3326; --editor-mark-ink: #3A2418;
 }
 
 [data-theme="mist"],
@@ -142,10 +224,15 @@
   --bg-base: #FAF7F0; --bg-surface: #F5F1E8; --bg-elevated: #FFFFFF;
   --bg-hover: rgba(31,27,22,0.04);
   --text-primary: #1F1B16; --text-secondary: #56503F; --text-muted: #8A7E6A;
-  --accent: #B85C3F; --accent-hover: #A04E35; --accent-muted: #D6A86C;
+  --accent: #A04E35; --accent-hover: #8E442E; --accent-muted: #D6A86C;
   --success: #16A34A; --warning: #D97706; --error: #DC2626; --info: #2563EB;
   --border: rgba(31,27,22,0.12); --border-hover: rgba(31,27,22,0.22);
   --accent-soft: rgba(184,92,63,0.10);
+  --editor-page-bg: #FFFDF7; --editor-ruled-line: rgba(31,27,22,0.08);
+  --editor-selection-bg: rgba(37,99,235,0.20); --editor-selection-text: #111827;
+  --editor-ink-primary: #1F1B16; --editor-ink-strong: #050505; --editor-ink-cream: #7A4A1F; --editor-ink-muted: #725A32;
+  --editor-ink-gold: #8A5B00; --editor-ink-orange: #B54708; --editor-ink-red: #B91C1C; --editor-ink-blue: #1D4ED8; --editor-ink-green: #15803D; --editor-ink-purple: #7E22CE;
+  --editor-mark-yellow: #FFE45C; --editor-mark-red: #FFD6D6; --editor-mark-blue: #D7E8FF; --editor-mark-green: #D8F5DF; --editor-mark-purple: #EAD7FF; --editor-mark-brown: #F1E7D4; --editor-mark-ink: #E9DEC8;
 }
 
 /* ========================================
@@ -190,8 +277,8 @@ body {
 
 /* 选中文字颜色 */
 ::selection {
-  background: var(--accent-muted);
-  color: var(--text-primary);
+  background: var(--editor-selection-bg);
+  color: var(--editor-selection-text);
 }
 
 /* ── 衬线正文（章节内容区）───────────────────────── */
@@ -214,16 +301,17 @@ body {
 .sf-manuscript-editor > div:first-child {
   border: 1px solid var(--border);
   border-radius: 12px;
-  background: color-mix(in srgb, var(--bg-surface) 72%, transparent);
+  background: color-mix(in srgb, var(--bg-surface) 86%, transparent);
   margin-bottom: 24px;
 }
 
 .sf-manuscript-editor > div:last-child {
+  background-color: var(--editor-page-bg);
   background-image: repeating-linear-gradient(
     0deg,
     transparent 0,
     transparent 39px,
-    var(--border-subtle) 40px
+    var(--editor-ruled-line) 40px
   );
 }
 
@@ -233,6 +321,7 @@ body {
   line-height: 2.2;
   letter-spacing: 0.01em;
   padding: 4px 10px 28px;
+  color: var(--editor-ink-primary);
 }
 
 .sf-manuscript-editor .tiptap-editor p {
@@ -278,6 +367,11 @@ body {
 .tiptap-editor {
   min-height: 100%;
   outline: none;
+}
+
+.tiptap-editor ::selection {
+  background: var(--editor-selection-bg);
+  color: var(--editor-selection-text);
 }
 
 .tiptap-editor p {
@@ -345,4 +439,98 @@ body {
   pointer-events: none;
   height: 0;
   float: left;
+}
+
+/* 浅色主题下修正历史遗留的 Tailwind 亮色工具类：这些类原本面向暗色底，放到纸面上会发虚。 */
+[data-theme="paper"] .text-green-400,
+[data-theme="paper"] .text-emerald-400,
+[data-theme="paper"] [class*="text-green-400"],
+[data-theme="paper"] [class*="text-emerald-400"],
+[data-theme="scroll"] .text-green-400,
+[data-theme="scroll"] .text-emerald-400,
+[data-theme="scroll"] [class*="text-green-400"],
+[data-theme="scroll"] [class*="text-emerald-400"] {
+  color: #065F46 !important;
+}
+
+[data-theme="paper"] .text-sky-300,
+[data-theme="paper"] .text-sky-400,
+[data-theme="paper"] .text-blue-400,
+[data-theme="paper"] [class*="text-sky-300"],
+[data-theme="paper"] [class*="text-sky-400"],
+[data-theme="paper"] [class*="text-blue-400"],
+[data-theme="scroll"] .text-sky-300,
+[data-theme="scroll"] .text-sky-400,
+[data-theme="scroll"] .text-blue-400,
+[data-theme="scroll"] [class*="text-sky-300"],
+[data-theme="scroll"] [class*="text-sky-400"],
+[data-theme="scroll"] [class*="text-blue-400"] {
+  color: #1E40AF !important;
+}
+
+[data-theme="paper"] .text-yellow-400,
+[data-theme="paper"] .text-amber-300,
+[data-theme="paper"] .text-amber-400,
+[data-theme="paper"] .text-amber-500,
+[data-theme="paper"] [class*="text-yellow-400"],
+[data-theme="paper"] [class*="text-amber-300"],
+[data-theme="paper"] [class*="text-amber-400"],
+[data-theme="paper"] [class*="text-amber-500"],
+[data-theme="scroll"] .text-yellow-400,
+[data-theme="scroll"] .text-amber-300,
+[data-theme="scroll"] .text-amber-400,
+[data-theme="scroll"] .text-amber-500,
+[data-theme="scroll"] [class*="text-yellow-400"],
+[data-theme="scroll"] [class*="text-amber-300"],
+[data-theme="scroll"] [class*="text-amber-400"],
+[data-theme="scroll"] [class*="text-amber-500"] {
+  color: #92400E !important;
+}
+
+[data-theme="paper"] .text-red-400,
+[data-theme="paper"] .text-red-500,
+[data-theme="paper"] [class*="text-red-400"],
+[data-theme="paper"] [class*="text-red-500"],
+[data-theme="scroll"] .text-red-400,
+[data-theme="scroll"] .text-red-500,
+[data-theme="scroll"] [class*="text-red-400"],
+[data-theme="scroll"] [class*="text-red-500"] {
+  color: #B91C1C !important;
+}
+
+[data-theme="paper"] .text-purple-300,
+[data-theme="paper"] .text-purple-400,
+[data-theme="paper"] .text-purple-500,
+[data-theme="paper"] [class*="text-purple-300"],
+[data-theme="paper"] [class*="text-purple-400"],
+[data-theme="paper"] [class*="text-purple-500"],
+[data-theme="scroll"] .text-purple-300,
+[data-theme="scroll"] .text-purple-400,
+[data-theme="scroll"] .text-purple-500,
+[data-theme="scroll"] [class*="text-purple-300"],
+[data-theme="scroll"] [class*="text-purple-400"],
+[data-theme="scroll"] [class*="text-purple-500"] {
+  color: #7E22CE !important;
+}
+
+[data-theme="paper"] .text-pink-400,
+[data-theme="paper"] .text-pink-500,
+[data-theme="paper"] [class*="text-pink-400"],
+[data-theme="paper"] [class*="text-pink-500"],
+[data-theme="scroll"] .text-pink-400,
+[data-theme="scroll"] .text-pink-500,
+[data-theme="scroll"] [class*="text-pink-400"],
+[data-theme="scroll"] [class*="text-pink-500"] {
+  color: #BE185D !important;
+}
+
+[data-theme="paper"] .text-orange-400,
+[data-theme="paper"] .text-orange-500,
+[data-theme="paper"] [class*="text-orange-400"],
+[data-theme="paper"] [class*="text-orange-500"],
+[data-theme="scroll"] .text-orange-400,
+[data-theme="scroll"] .text-orange-500,
+[data-theme="scroll"] [class*="text-orange-400"],
+[data-theme="scroll"] [class*="text-orange-500"] {
+  color: #C2410C !important;
 }

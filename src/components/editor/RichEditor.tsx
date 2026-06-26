@@ -80,9 +80,76 @@ const PARAGRAPH_SPACING_OPTIONS = [
   { label: '2行', value: '2em' },
 ] as const
 
-const TEXT_COLOR_PRESETS = ['#f5e6d3', '#ffffff', '#d6b98c', '#d97757', '#60a5fa', '#4ade80', '#ef4444'] as const
-const BACKGROUND_COLOR_PRESETS = ['#00000000', '#3a2418', '#4a3326', '#5c3b2d', '#1f2937', '#3f2f08', '#14532d'] as const
+const TEXT_COLOR_PRESETS = [
+  { label: '正文', value: 'var(--editor-ink-primary)' },
+  { label: '强黑/强白', value: 'var(--editor-ink-strong)' },
+  { label: '暖褐', value: 'var(--editor-ink-cream)' },
+  { label: '大黄', value: 'var(--editor-ink-gold)' },
+  { label: '橙红', value: 'var(--editor-ink-orange)' },
+  { label: '蓝', value: 'var(--editor-ink-blue)' },
+  { label: '绿', value: 'var(--editor-ink-green)' },
+  { label: '大红', value: 'var(--editor-ink-red)' },
+  { label: '紫', value: 'var(--editor-ink-purple)' },
+] as const
+const BACKGROUND_COLOR_PRESETS = [
+  { label: '清除文字背景色', value: '#00000000' },
+  { label: '黄底', value: 'var(--editor-mark-yellow)' },
+  { label: '红底', value: 'var(--editor-mark-red)' },
+  { label: '蓝底', value: 'var(--editor-mark-blue)' },
+  { label: '绿底', value: 'var(--editor-mark-green)' },
+  { label: '紫底', value: 'var(--editor-mark-purple)' },
+  { label: '褐底', value: 'var(--editor-mark-brown)' },
+  { label: '墨底', value: 'var(--editor-mark-ink)' },
+] as const
 const BLOCK_SPACING_NODE_TYPES = new Set(['paragraph', 'heading'])
+
+const LEGACY_THEME_COLOR_REPLACEMENTS: Array<[RegExp, string]> = [
+  [/(#f5e6d3|rgb\(\s*245\s*,\s*230\s*,\s*211\s*\))/gi, 'var(--editor-ink-cream)'],
+  [/(#ffffff|rgb\(\s*255\s*,\s*255\s*,\s*255\s*\))/gi, 'var(--editor-ink-strong)'],
+  [/(#d6b98c|rgb\(\s*214\s*,\s*185\s*,\s*140\s*\))/gi, 'var(--editor-ink-muted)'],
+  [/(#d97757|rgb\(\s*217\s*,\s*119\s*,\s*87\s*\))/gi, 'var(--editor-ink-orange)'],
+  [/(#60a5fa|rgb\(\s*96\s*,\s*165\s*,\s*250\s*\))/gi, 'var(--editor-ink-blue)'],
+  [/(#4ade80|rgb\(\s*74\s*,\s*222\s*,\s*128\s*\))/gi, 'var(--editor-ink-green)'],
+  [/(#ef4444|rgb\(\s*239\s*,\s*68\s*,\s*68\s*\))/gi, 'var(--editor-ink-red)'],
+  [/(#3a2418|rgb\(\s*58\s*,\s*36\s*,\s*24\s*\))/gi, 'var(--editor-mark-ink)'],
+  [/(#4a3326|rgb\(\s*74\s*,\s*51\s*,\s*38\s*\))/gi, 'var(--editor-mark-brown)'],
+  [/(#5c3b2d|rgb\(\s*92\s*,\s*59\s*,\s*45\s*\))/gi, 'var(--editor-mark-red)'],
+  [/(#1f2937|rgb\(\s*31\s*,\s*41\s*,\s*55\s*\))/gi, 'var(--editor-mark-blue)'],
+  [/(#3f2f08|rgb\(\s*63\s*,\s*47\s*,\s*8\s*\))/gi, 'var(--editor-mark-yellow)'],
+  [/(#14532d|rgb\(\s*20\s*,\s*83\s*,\s*45\s*\))/gi, 'var(--editor-mark-green)'],
+]
+
+function normalizeThemeAdaptiveColorHtml(html: string): string {
+  return LEGACY_THEME_COLOR_REPLACEMENTS.reduce(
+    (next, [pattern, replacement]) => next.replace(pattern, replacement),
+    html,
+  )
+}
+
+function rgbToHex(color: string): string | null {
+  const match = color.match(/rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/i)
+  if (!match) return null
+
+  return `#${[match[1], match[2], match[3]]
+    .map(part => Math.max(0, Math.min(255, Number(part))).toString(16).padStart(2, '0'))
+    .join('')}`
+}
+
+function resolveColorForInput(color: string, fallback: string): string {
+  if (/^#[0-9a-f]{6}$/i.test(color)) return color
+  const rgb = rgbToHex(color)
+  if (rgb) return rgb
+
+  const varName = color.match(/var\((--[^),\s]+)/)?.[1]
+  if (varName && typeof window !== 'undefined') {
+    const resolved = getComputedStyle(document.documentElement).getPropertyValue(varName).trim()
+    if (/^#[0-9a-f]{6}$/i.test(resolved)) return resolved
+    const resolvedRgb = rgbToHex(resolved)
+    if (resolvedRgb) return resolvedRgb
+  }
+
+  return fallback
+}
 
 const BlockSpacing = Extension.create({
   name: 'blockSpacing',
@@ -174,6 +241,7 @@ const RichEditor = forwardRef<RichEditorHandle, Props>(function RichEditor(
   const savedSelectionRef = useRef<{ from: number; to: number } | null>(null)
   const pendingTextStyleRef = useRef<PendingTextStyle>({})
   const [pendingTextStyle, setPendingTextStyle] = useState<PendingTextStyle>({})
+  const [, setThemeRevision] = useState(0)
 
   const updatePendingTextStyle = (patch: PendingTextStyle) => {
     const next: PendingTextStyle = {
@@ -222,7 +290,7 @@ const RichEditor = forwardRef<RichEditorHandle, Props>(function RichEditor(
       BlockSpacing,
       Placeholder.configure({ placeholder }),
     ],
-    content: toHtml(value),
+    content: normalizeThemeAdaptiveColorHtml(toHtml(value)),
     editable: !disabled,
     editorProps: {
       attributes: {
@@ -259,7 +327,7 @@ const RichEditor = forwardRef<RichEditorHandle, Props>(function RichEditor(
   useEffect(() => {
     if (!editor) return
     const current = editor.getHTML()
-    const incoming = toHtml(value)
+    const incoming = normalizeThemeAdaptiveColorHtml(toHtml(value))
     if (incoming !== current) {
       editor.commands.setContent(incoming, { emitUpdate: false })
     }
@@ -269,6 +337,12 @@ const RichEditor = forwardRef<RichEditorHandle, Props>(function RichEditor(
   useEffect(() => {
     if (editor) editor.setEditable(!disabled)
   }, [disabled, editor])
+
+  useEffect(() => {
+    const rerenderForTheme = () => setThemeRevision(revision => revision + 1)
+    window.addEventListener('themechange', rerenderForTheme)
+    return () => window.removeEventListener('themechange', rerenderForTheme)
+  }, [])
 
   useImperativeHandle(
     ref,
@@ -436,8 +510,13 @@ const RichEditor = forwardRef<RichEditorHandle, Props>(function RichEditor(
   const hasSavedRange = selection.from !== selection.to
   const displayFontFamily = currentFontFamily || (!hasSavedRange ? pendingTextStyle.fontFamily ?? '' : '')
   const displayFontSize = currentFontSize || (!hasSavedRange ? pendingTextStyle.fontSize ?? '' : '')
-  const displayColor = currentColor || pendingTextStyle.color || '#f5e6d3'
+  const displayColor = currentColor || pendingTextStyle.color || 'var(--editor-ink-primary)'
   const displayBackgroundColor = currentBackgroundColor || pendingTextStyle.backgroundColor || '#00000000'
+  const colorInputValue = resolveColorForInput(displayColor, '#f5e6d3')
+  const backgroundColorInputValue = resolveColorForInput(
+    displayBackgroundColor === '#00000000' ? 'var(--editor-mark-yellow)' : displayBackgroundColor,
+    '#ffe45c',
+  )
 
   const selectCls = 'h-8 rounded-md border border-border bg-bg-surface px-2 text-xs text-text-secondary outline-none transition-colors hover:text-text-primary focus:border-accent'
 
@@ -588,19 +667,19 @@ const RichEditor = forwardRef<RichEditorHandle, Props>(function RichEditor(
           <input
             aria-label="字色"
             type="color"
-            value={displayColor}
+            value={colorInputValue}
             onChange={(event) => applyTextColor(event.target.value)}
             className="h-5 w-6 cursor-pointer border-0 bg-transparent p-0"
           />
           <div className="hidden items-center gap-0.5 md:flex">
             {TEXT_COLOR_PRESETS.map(color => (
               <button
-                key={color}
+                key={color.label}
                 type="button"
-                aria-label={`字色 ${color}`}
-                onClick={() => applyTextColor(color)}
+                aria-label={`字色 ${color.label}`}
+                onClick={() => applyTextColor(color.value)}
                 className="h-4 w-4 rounded border border-border hover:border-accent"
-                style={{ backgroundColor: color }}
+                style={{ backgroundColor: color.value }}
               />
             ))}
           </div>
@@ -617,21 +696,21 @@ const RichEditor = forwardRef<RichEditorHandle, Props>(function RichEditor(
           <input
             aria-label="文字背景色"
             type="color"
-            value={displayBackgroundColor === '#00000000' ? '#3a2418' : displayBackgroundColor}
+            value={backgroundColorInputValue}
             onChange={(event) => setTextBackgroundColor(event.target.value)}
             className="h-5 w-6 cursor-pointer border-0 bg-transparent p-0"
           />
           <div className="hidden items-center gap-0.5 md:flex">
             {BACKGROUND_COLOR_PRESETS.map(color => (
               <button
-                key={color}
+                key={color.label}
                 type="button"
-                aria-label={color === '#00000000' ? '清除文字背景色' : `文字背景色 ${color}`}
-                onClick={() => setTextBackgroundColor(color)}
+                aria-label={color.label}
+                onClick={() => setTextBackgroundColor(color.value)}
                 className="h-4 w-4 rounded border border-border hover:border-accent"
                 style={{
-                  backgroundColor: color === '#00000000' ? 'transparent' : color,
-                  backgroundImage: color === '#00000000'
+                  backgroundColor: color.value === '#00000000' ? 'transparent' : color.value,
+                  backgroundImage: color.value === '#00000000'
                     ? 'linear-gradient(135deg, transparent 45%, var(--error) 46%, var(--error) 54%, transparent 55%)'
                     : undefined,
                 }}
