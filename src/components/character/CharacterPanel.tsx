@@ -18,6 +18,8 @@ import type {
   Project, Character, CharacterMoralAxis, CharacterOrderAxis, CharacterRoleWeight,
 } from '../../lib/types'
 import CharacterStatusPanel from './CharacterStatusPanel'
+import CharacterDimensionPicker from './CharacterDimensionPicker'
+import { CHARACTER_DIMENSIONS, type CharacterDimensionKey } from '../../lib/character/character-dimensions'
 import CharacterAxesPicker from './CharacterAxesPicker'
 import {
   MORAL_AXIS_LABELS,
@@ -59,6 +61,9 @@ export default function CharacterPanel({ project, view = 'generator' }: Props) {
     orderAxis: CharacterOrderAxis | null
   }>({ roleWeight: null, moralAxis: null, orderAxis: null })
   const [parameterValues, setParameterValues] = useState<Record<string, unknown>>({})
+  // B：AI 生成时选哪些维度（默认全选；可按戏份预设/增减）
+  const [genDims, setGenDims] = useState<Set<CharacterDimensionKey>>(() => new Set(CHARACTER_DIMENSIONS.map(d => d.key)))
+  const [showDimPicker, setShowDimPicker] = useState(false)
   const [systemOverride, setSystemOverride] = useState<string | null>(null)
   const [userOverride, setUserOverride] = useState<string | null>(null)
   // 多世界：角色世界过滤器（'all' | 'cross' | 世界组 id）
@@ -122,7 +127,12 @@ export default function CharacterPanel({ project, view = 'generator' }: Props) {
     const existing = characters.map(c =>
       `${c.name}（${ROLE_WEIGHT_LABELS[c.roleWeight]} · ${ORDER_AXIS_LABELS[c.orderAxis]}${MORAL_AXIS_LABELS[c.moralAxis]}）`,
     ).join('、')
-    const enrichedHint = [hint, rosterGap].filter(Boolean).join('\n')
+    // B：维度范围指令——非全选时,告诉 AI 只生成选中的维度,其余留空(不动基础模板)
+    const allKeys = CHARACTER_DIMENSIONS.map(d => d.key)
+    const dimInstruction = genDims.size > 0 && genDims.size < allKeys.length
+      ? `本次只需设计以下维度，其余维度一律留空：${CHARACTER_DIMENSIONS.filter(d => genDims.has(d.key)).map(d => d.label).join('、')}`
+      : ''
+    const enrichedHint = [hint, rosterGap, dimInstruction].filter(Boolean).join('\n')
     // 多世界：按当前选中/活跃世界读取上下文（此前写死单世界）
     const targetWorld = project.enableMultiWorld
       ? (typeof worldFilter === 'number' ? worldFilter : activeGroupId)
@@ -182,6 +192,23 @@ export default function CharacterPanel({ project, view = 'generator' }: Props) {
                 placeholder="角色要求（可选）"
                 className="w-48 px-2 py-1.5 bg-bg-surface border border-border rounded text-xs text-text-primary focus:outline-none focus:border-accent"
               />
+              <div className="relative">
+                <button
+                  onClick={() => setShowDimPicker(!showDimPicker)}
+                  className="flex items-center gap-1 px-2.5 py-2 bg-bg-surface text-text-secondary text-xs rounded-md hover:text-accent transition-colors border border-border"
+                  title="选择 AI 这次要设计哪些维度"
+                >
+                  维度 {genDims.size}/{CHARACTER_DIMENSIONS.length} <ChevronDown className="w-3 h-3" />
+                </button>
+                {showDimPicker && (
+                  <>
+                    <div className="fixed inset-0 z-40" onClick={() => setShowDimPicker(false)} />
+                    <div className="absolute top-full left-0 mt-1 z-50 bg-bg-surface border border-border rounded-lg shadow-lg p-3 w-[420px]">
+                      <CharacterDimensionPicker selected={genDims} onChange={setGenDims} />
+                    </div>
+                  </>
+                )}
+              </div>
               <button
                 onClick={handleAIGenerate}
                 disabled={ai.isStreaming}
