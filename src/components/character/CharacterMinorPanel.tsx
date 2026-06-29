@@ -3,6 +3,7 @@ import { Plus, Trash2, User } from 'lucide-react'
 import { useCharacterStore } from '../../stores/character'
 import type { Project, Character } from '../../lib/types'
 import { filterCharactersByRoleWeight } from '../../lib/character/character-axes'
+import CharacterDimensionFields from './CharacterDimensionFields'
 
 interface Props {
   project: Project
@@ -86,20 +87,7 @@ export default function CharacterMinorPanel({ project }: Props) {
               />
               {(editing === c.id) ? (
                 <div className="mt-2 space-y-1.5">
-                  <textarea
-                    value={c.personality}
-                    onChange={e => update(c.id!, { personality: e.target.value })}
-                    placeholder="性格..."
-                    rows={2}
-                    className="w-full px-2 py-1 bg-bg-base border border-border rounded text-xs text-text-primary resize-none focus:outline-none focus:border-accent"
-                  />
-                  <textarea
-                    value={c.background}
-                    onChange={e => update(c.id!, { background: e.target.value })}
-                    placeholder="背景..."
-                    rows={2}
-                    className="w-full px-2 py-1 bg-bg-base border border-border rounded text-xs text-text-primary resize-none focus:outline-none focus:border-accent"
-                  />
+                  <CharacterDimensionFields character={c} onChange={patch => update(c.id!, patch)} />
                   <button
                     onClick={() => setEditing(null)}
                     className="text-xs text-accent hover:underline"
@@ -112,7 +100,7 @@ export default function CharacterMinorPanel({ project }: Props) {
                   onClick={() => setEditing(c.id!)}
                   className="mt-2 text-xs text-text-secondary hover:text-accent"
                 >
-                  展开编辑 ▾
+                  展开完整设定 ▾
                 </button>
               )}
             </div>
