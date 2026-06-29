@@ -55,7 +55,7 @@ jobs:
         run: |
           mkdir -p release/StoryForge-Windows-Portable
           cp release/StoryForge-Windows-${RELEASE_TAG}.exe release/StoryForge-Windows-Portable/StoryForge.exe
-          cp packaging/windows/README-请先看我.txt release/StoryForge-Windows-Portable/
+          cp packaging/windows/README-Windows-Portable.txt release/StoryForge-Windows-Portable/
           cp README.md CHANGELOG.md release/StoryForge-Windows-Portable/
           cd release
           zip -r StoryForge-Windows-Portable-${RELEASE_TAG}.zip StoryForge-Windows-Portable
