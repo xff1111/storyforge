@@ -245,6 +245,15 @@ export default function ForeshadowPanel({ project }: Props) {
         </div>
       </div>
 
+      {/* CF-6: 讲清伏笔的作用边界，避免用户以为会自动插入已写正文 */}
+      <div className="flex items-start gap-2 rounded-lg border border-accent/20 bg-accent/5 px-4 py-3 text-xs text-text-secondary">
+        <Info className="mt-0.5 h-4 w-4 shrink-0 text-accent" />
+        <div className="space-y-0.5">
+          <p>伏笔<strong>不会自动改写你已经写好的正文</strong>。给伏笔指定埋设 / 呼应 / 回收章节后，<strong>生成或续写那一章时</strong>，AI 会把它作为写作任务提醒注入上下文。</p>
+          <p>目前没有"一键把伏笔插入已写正文"的按钮；要在已写好的正文里补线索，请手动修改，或用审校 / 改稿功能。</p>
+        </div>
+      </div>
+
       <div className="rounded-lg border border-accent/20 bg-accent/5 p-3 text-xs leading-relaxed text-text-secondary">
         <div className="flex items-start gap-2">
           <Info className="mt-0.5 h-3.5 w-3.5 flex-shrink-0 text-accent" />
