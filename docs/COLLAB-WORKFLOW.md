@@ -43,6 +43,7 @@
 - Codex 开发完：`push feat/xxx` → 开 PR，PR 描述写清「改了什么 / 为什么 / 怎么验证」。
 - Claude 审查：`git fetch` → 读 diff → 跑测试 → 结论。发现问题：① 在 PR 留评论让 Codex 改；或 ② 直接把修复 commit 押到该分支（commit message 注明「审查修复」）。
 - **文档（ROADMAP 等）只承载"要做什么"（backlog / bug 清单）**——这部分文档配合是高效的，保留。**不要用文档传"这段代码是什么"。**
+- **人话对话走 `docs/COLLAB-LOG.md`**（沟通频道）：Codex 交付报告、Claude 审查答复在此来回追加，替代作者人工转达。**它只承载对话（做了什么 / 哪个分支 / 审查结论 / 待决策），不贴代码（走 Git）、不写 backlog（进 ROADMAP）。** 规则见该文件头部。
 
 ---
 
