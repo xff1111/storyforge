@@ -6,6 +6,7 @@ import { filterCharactersByRoleWeight } from '../../lib/character/character-axes
 import CharacterDimensionFields from './CharacterDimensionFields'
 import CharacterSupplementAction from './CharacterSupplementAction'
 import { filledDimensions, type CharacterDimensionKey } from '../../lib/character/character-dimensions'
+import { CInput } from '../shared/CompositionInput'
 
 interface Props {
   project: Project
@@ -92,16 +93,14 @@ export default function CharacterExtraPanel({ project }: Props) {
                         </button>
                       </td>
                       <td className="px-3 py-1.5">
-                        <input
-                          type="text"
+                        <CInput
                           value={c.name}
                           onChange={e => update(c.id!, { name: e.target.value })}
                           className="w-full px-2 py-1 bg-bg-base border border-border rounded text-sm text-text-primary focus:outline-none focus:border-accent"
                         />
                       </td>
                       <td className="px-3 py-1.5">
-                        <input
-                          type="text"
+                        <CInput
                           value={c.firstAppearance || ''}
                           onChange={e => update(c.id!, { firstAppearance: e.target.value })}
                           placeholder="如：第 3 卷"
@@ -109,8 +108,7 @@ export default function CharacterExtraPanel({ project }: Props) {
                         />
                       </td>
                       <td className="px-3 py-1.5">
-                        <input
-                          type="text"
+                        <CInput
                           value={c.location || ''}
                           onChange={e => update(c.id!, { location: e.target.value })}
                           placeholder="如：第 12 章"
@@ -118,8 +116,7 @@ export default function CharacterExtraPanel({ project }: Props) {
                         />
                       </td>
                       <td className="px-3 py-1.5">
-                        <input
-                          type="text"
+                        <CInput
                           value={c.storyRole || ''}
                           onChange={e => update(c.id!, { storyRole: e.target.value })}
                           placeholder="如：路过的剑客 / 报信人"
@@ -127,8 +124,7 @@ export default function CharacterExtraPanel({ project }: Props) {
                         />
                       </td>
                       <td className="px-3 py-1.5">
-                        <input
-                          type="text"
+                        <CInput
                           value={c.ending || ''}
                           onChange={e => update(c.id!, { ending: e.target.value })}
                           placeholder="如：失踪 / 已死"

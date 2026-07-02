@@ -3,6 +3,7 @@ import {
   Plus, Sparkles, Trash2, ChevronDown, ChevronRight,
 } from 'lucide-react'
 import { InlineInput, InlineTextarea } from '../shared/InlineEdit'
+import { CInput } from '../shared/CompositionInput'
 import { useCharacterStore } from '../../stores/character'
 import { useWorldGroupStore } from '../../stores/world-group'
 import { useAIConfigStore } from '../../stores/ai-config'
@@ -192,7 +193,7 @@ export default function CharacterPanel({ project, view = 'generator' }: Props) {
               )}
             </div>
             <div className="flex items-center gap-2 flex-1">
-              <input
+              <CInput
                 value={hint}
                 onChange={e => setHint(e.target.value)}
                 placeholder="角色要求（可选）"

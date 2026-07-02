@@ -5,6 +5,7 @@ import type { Project, Character } from '../../lib/types'
 import { filterCharactersByRoleWeight } from '../../lib/character/character-axes'
 import CharacterDimensionFields from './CharacterDimensionFields'
 import CharacterSupplementAction from './CharacterSupplementAction'
+import { CInput, CTextarea } from '../shared/CompositionInput'
 
 interface Props {
   project: Project
@@ -65,8 +66,7 @@ export default function CharacterMinorPanel({ project }: Props) {
                 <div className="w-8 h-8 rounded-full bg-bg-elevated flex items-center justify-center flex-shrink-0">
                   <User className="w-4 h-4 text-text-secondary" />
                 </div>
-                <input
-                  type="text"
+                <CInput
                   value={c.name}
                   onChange={e => update(c.id!, { name: e.target.value })}
                   className="flex-1 px-2 py-1 bg-bg-base border border-border rounded text-sm font-medium text-text-primary focus:outline-none focus:border-accent"
@@ -86,7 +86,7 @@ export default function CharacterMinorPanel({ project }: Props) {
                   <Trash2 className="w-3.5 h-3.5" />
                 </button>
               </div>
-              <textarea
+              <CTextarea
                 value={c.shortDescription}
                 onChange={e => update(c.id!, { shortDescription: e.target.value })}
                 placeholder="一句话简介..."

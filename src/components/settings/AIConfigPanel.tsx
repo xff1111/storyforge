@@ -57,9 +57,12 @@ export default function AIConfigPanel() {
   const handleTest = async () => {
     setTesting(true)
     setTestResult(null)
-    const result = await testConnection()
-    setTestResult(result)
-    setTesting(false)
+    try {
+      const result = await testConnection()
+      setTestResult(result)
+    } finally {
+      setTesting(false)
+    }
   }
 
   const handleThemeChange = (theme: StoryForgeTheme) => {
@@ -229,6 +232,27 @@ export default function AIConfigPanel() {
                 onChange={(e) => setConfig({ baseUrl: e.target.value })}
                 className="w-full px-3 py-2 bg-bg-base border border-border rounded-lg text-text-primary text-sm focus:outline-none focus:border-accent transition-colors"
               />
+              {['custom', 'ollama'].includes(config.provider) && (
+                <div className="mt-1.5 flex flex-wrap gap-1.5">
+                  <button
+                    onClick={() => setConfig({ provider: 'custom', baseUrl: 'http://localhost:1234/v1', apiKey: config.apiKey || 'lm-studio', model: 'qwen3-14b' })}
+                    className="text-xs px-2 py-1 rounded bg-bg-elevated text-text-secondary border border-border hover:text-accent hover:border-accent/50 transition-colors"
+                  >
+                    LM Studio
+                  </button>
+                  <button
+                    onClick={() => setConfig({ provider: 'ollama', baseUrl: 'http://localhost:11434/v1', apiKey: config.apiKey || 'ollama', model: 'qwen2.5:7b' })}
+                    className="text-xs px-2 py-1 rounded bg-bg-elevated text-text-secondary border border-border hover:text-accent hover:border-accent/50 transition-colors"
+                  >
+                    Ollama
+                  </button>
+                </div>
+              )}
+              {['custom', 'ollama'].includes(config.provider) && (
+                <p className="mt-1 text-[11px] text-text-muted">
+                  LM Studio / Ollama 请选择 OpenAI 兼容接口，Base URL 填到 /v1；不要填 /v1/models 或 /chat/completions，测试时会自动修正常见误填。
+                </p>
+              )}
               {(() => {
                 // 需要代理的 provider 及其代理路径 / 原始地址映射
                 const PROXY_MAP: Record<string, { proxy: string; direct: string }> = {
@@ -384,7 +408,7 @@ export default function AIConfigPanel() {
             <div className="flex items-center gap-3">
               <button
                 onClick={handleTest}
-                disabled={testing || !config.apiKey}
+                disabled={testing || (!config.apiKey && !['custom', 'ollama'].includes(config.provider))}
                 className="flex items-center gap-2 px-4 py-2 bg-accent/10 text-accent rounded-lg hover:bg-accent/20 disabled:opacity-40 transition-colors text-sm"
               >
                 {testing ? (

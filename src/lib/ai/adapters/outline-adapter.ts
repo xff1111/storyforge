@@ -1,6 +1,10 @@
 import type { ChatMessage } from '../../types'
 import { usePromptStore } from '../../../stores/prompt'
 import { renderPrompt } from '../prompt-engine'
+import {
+  appendSimplifiedChineseOutputConstraint,
+  appendUserConstraint,
+} from './prompt-guards'
 
 export interface RunOptions {
   parameterValues?: Record<string, unknown>
@@ -11,13 +15,6 @@ export interface VolumeOutlineRequest {
   existingVolumesContext?: string
   existingVolumeCount?: number
   targetVolumeTitle?: string
-}
-
-function appendUserConstraint(messages: ChatMessage[], constraint: string): ChatMessage[] {
-  const next = messages.map(message => ({ ...message }))
-  const user = [...next].reverse().find(message => message.role === 'user')
-  if (user) user.content = `${user.content}\n\n${constraint}`
-  return next
 }
 
 /** 生成卷级大纲 */
@@ -84,7 +81,9 @@ export function buildVolumeOutlinePrompt(
   } else {
     constraints.push('用户未指定卷数。请根据目标字数、世界观、故事核心、主线阶段和已有卷进度合理决定后续卷数；不得套用固定 2 卷或其他固定值。')
   }
-  return appendUserConstraint(messages, constraints.join('\n'))
+  return appendSimplifiedChineseOutputConstraint(
+    appendUserConstraint(messages, constraints.join('\n')),
+  )
 }
 
 /** 将卷展开为章节大纲 */
@@ -110,9 +109,11 @@ export function buildChapterOutlinePrompt(
     userHint,
   }, options)
   // CF-3：章纲必须服从本卷 summary 所承载的主线方向，不得另起支线压过主线。
-  return appendUserConstraint(
-    messages,
-    '【主线一致性·硬约束】本卷大纲已承载故事主线，章纲必须服从本卷 summary 的主线方向：每章 summary 说明它推进了本卷/主线的哪一步；可以有支线，但不得另起或让支线压过主线。',
+  return appendSimplifiedChineseOutputConstraint(
+    appendUserConstraint(
+      messages,
+      '【主线一致性·硬约束】本卷大纲已承载故事主线，章纲必须服从本卷 summary 的主线方向：每章 summary 说明它推进了本卷/主线的哪一步；可以有支线，但不得另起或让支线压过主线。',
+    ),
   )
 }
 
@@ -145,8 +146,8 @@ export function buildSingleChapterOutlinePrompt(
     characterContext,
     worldRulesContext,
   )
-  return appendUserConstraint(messages, `【本次单章补全硬约束】
+  return appendSimplifiedChineseOutputConstraint(appendUserConstraint(messages, `【本次单章补全硬约束】
 本次不是重建整卷，只补全现有空章节《${chapterTitle}》的章纲。
 ${siblingChaptersContext || '本卷暂无其他章节可供衔接。'}
-只输出 1 个 JSON 元素；title 必须保持为“${chapterTitle}”，summary 用 1-3 句写清本章事件、冲突、推进作用与结尾衔接，不得生成其他章节。`)
+只输出 1 个 JSON 元素；title 必须保持为“${chapterTitle}”，summary 用 1-3 句写清本章事件、冲突、推进作用与结尾衔接，不得生成其他章节。`))
 }

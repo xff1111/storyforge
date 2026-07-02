@@ -214,7 +214,7 @@
 # ═══ 社区反馈批次（2026-07-02 · 角色弧光 / 生成一致性 / 本地模型 / 输入法 / 流派约束）═══
 
 > **来源**：2026-07-02 群内用户截图 + 录屏，附件包括 `QQ20260702-100105.mp4` 与 7 张截图。
-> **当前状态**：CF-20260702-8 已定位并在 `codex/community-feedback-20260702` 分支修复；其余条目已做只读定位，尚未实现修复。以下未完成条目进入待开发池，后续按分支 + PR 处理。
+> **当前状态**：`codex/community-feedback-20260702` 分支已处理 CF-20260702-1 / 2 / 4 / 5 / 6 / 8；CF-20260702-9 已完成底层主线对齐修复，但“是否回写故事主线 / 新增角色驱动方案存储”仍需产品决策；CF-20260702-3 / 7 属于生成依据面板与统一质量闸门，待确认交互范围后实施。
 > **铁律复述**：① AI 读上下文必须经 `CONTEXT_SOURCES / assembleContext()`；② AI 写回必须经 `FIELD_REGISTRY / ADOPTION_SCHEMA / adopt()`；③ 涉及表/字段/生命周期改动必须同步 `PROJECT_TABLES`；④ 本批中“显示不全 / 输入粘连 / 设置连接失败”可先做 UI 修复，但任何 AI 生成链路调整不得绕过三注册表。
 
 ## 附件索引
@@ -231,7 +231,7 @@
 | `codex-clipboard-8c744fc3-e073-4819-b745-74489e6d7e25.png` + `QQ20260702-110550.mp4` | v3.7.2 纯点击进入大纲后崩溃，错误为 `Cannot read properties of undefined (reading 'trim')` |
 | `codex-clipboard-9d9b765a-1ab5-41e9-8a4c-6f32af5fe2cc.png` + `codex-clipboard-fa7748f2-e323-47f1-81cb-9dfd1b8d01b7.png` | 角色驱动剧情反推的大纲与「故事设计」主线联动不足 |
 
-## 🔴 CF-20260702-1 — 角色弧光自动填充被硬截断，文字多时“不全”
+## ✅ CF-20260702-1 — 角色弧光自动填充被硬截断，文字多时“不全”
 
 - **现象**：在「故事设计 → 角色驱动 → 角色弧光设定」里点击“自动填充”，用户已有角色背景 / 弧光较长时，只填入前面一小段。
 - **已确认代码定位**：
@@ -248,9 +248,16 @@
   - 构造角色 `background / arc` 均超过 500 字，自动填充后输入框完整包含后文关键句。
   - 已有手写内容时不会被静默覆盖。
   - `npx tsc --noEmit`、相关组件测试 / 手动浏览器验证。
-- **优先级**：🔴 高（用户已有设定被静默截断，直接影响后续生成质量）。
+- **修复记录（Codex 分支）**：
+  1. `src/components/outline/CharacterDrivenPlotPanel.tsx` 移除自动填充的 `slice(0, 200)`，抽出 `applyCharacterArcAutoFill()`；完整填入长背景 / 长弧光。
+  2. 自动填充只补空字段，不覆盖用户已手写的起始状态 / 目标状态，避免“点一下把手写内容冲掉”。
+  3. `tests/regression/R-CF20260702-character-arc-autofill.test.ts` 覆盖长文本不截断与手写内容不覆盖。
+- **验证证据**：
+  - `npx vitest run tests/regression/R-CF20260702-character-arc-autofill.test.ts` ✅
+  - `npx tsc --noEmit` ✅
+- **优先级**：✅ 已处理。
 
-## 🔴 CF-20260702-2 — 章节目标 / 正文生成混入英文，且存在英文空格异常
+## ✅ CF-20260702-2 — 章节目标 / 正文生成混入英文，且存在英文空格异常
 
 - **现象**：章节目标显示“第1章：初入江湖”后，正文/目标中出现 `主角 enters a mysterious world...` 等英文片段；另有正文片段“tangledfuture”这类英文空格缺失，用户连续追问“为什么变成英文了 / 带一点英文是什么情况”。
 - **初步定位**：
@@ -267,7 +274,15 @@
   - 单测 prompt：三条主链路最终 messages 必须含“简体中文 / 不得中英夹杂”等约束。
   - 构造含英文污染的章纲，正文生成前能提示或清理。
   - 至少用一个 OpenAI-compatible 本地模型验证不再输出英文目标句。
-- **优先级**：🔴 高（核心输出语言错误，会污染大纲和正文）。
+- **修复记录（Codex 分支）**：
+  1. 新增 `src/lib/ai/adapters/prompt-guards.ts`，集中提供“简体中文输出 / 禁止中英夹杂 / 禁止整句英文 / 英文输入需转写为中文”的硬约束。
+  2. `src/lib/ai/adapters/outline-adapter.ts` 覆盖卷纲、章纲、单章补全。
+  3. `src/lib/ai/adapters/chapter-adapter.ts` 覆盖正文生成与续写，并保留连续性保护块。
+  4. 采纳前语言检测 / 一键清理属于 CF-20260702-7 的统一质量闸门，未在本次擅自新增交互。
+- **验证证据**：
+  - `npx vitest run tests/regression/R-CF20260702-language-guard.test.ts tests/regression/R-CF3-mainline-constraint.test.ts tests/regression/R-NS1-T6-T7-continuity-envelope.test.ts tests/regression/R-11-chapter-world-rules-context.test.ts` ✅
+  - `npx tsc --noEmit` ✅
+- **优先级**：✅ 语言硬约束已处理；采纳质量闸门并入 CF-20260702-7。
 
 ## 🔴 CF-20260702-3 — 卷纲生成依据不可见，且可能与灵感 / 故事核心脱节
 
@@ -292,7 +307,7 @@
   - 工作流链路与手动卷纲链路的 sourceKeys / 主线约束一致。
 - **优先级**：🔴 高（核心规划阶段失控，用户会认为 AI 随机创作）。
 
-## 🔴 CF-20260702-4 — 流派选择 ID 与 `GENRE_METADATA` 不一致，导致题材约束静默失效
+## ✅ CF-20260702-4 — 流派选择 ID 与 `GENRE_METADATA` 不一致，导致题材约束静默失效
 
 - **现象**：群内用户用外部模型指出流派 ID mismatch：弹窗里“科幻 = `kehuan`”，但 `GENRE_METADATA` 使用 `scifi`；“奇幻 = `qihuan`”，但元数据使用 `xifan`。用户询问能否按该分析检查“流派”定义。
 - **已确认代码定位**：
@@ -309,9 +324,17 @@
   - `kehuan` 能注入科幻约束；`qihuan`/`xifang` 能注入奇幻/西幻约束。
   - 多选 `['kehuan','moshi']` 时能同时注入科幻与末世约束。
   - 旧项目 `project.genre` 仍兼容，不需要迁移清库。
-- **优先级**：🔴 高（题材选择是全局核心参数，当前可能只显示不生效）。
+- **修复记录（Codex 分支）**：
+  1. `src/lib/ai/genre-metadata.ts` 新增 canonical/alias 映射：`kehuan -> scifi`，`qihuan/xifang/shishi/heian -> xifan` 等，旧项目保存值不迁移、不清库。
+  2. `buildGenreConstraintContext()` 支持单个 ID 与 ID 数组，按 canonical 去重后合并多个题材约束。
+  3. `src/components/editor/ChapterEditor.tsx` 优先使用 `project.genres[]` 多选流派，`project.genre` 作为旧字段 fallback。
+  4. `tests/regression/R-CF20260702-genre-metadata.test.ts` 覆盖别名、多选、去重和旧字段兼容。
+- **验证证据**：
+  - `npx vitest run tests/regression/R-CF20260702-genre-metadata.test.ts` ✅
+  - `npx tsc --noEmit` ✅
+- **优先级**：✅ 已处理。
 
-## 🟠 CF-20260702-5 — 本地模型 / LM Studio / Ollama 配置易错，测试连接失败时 UI 状态不友好
+## ✅ CF-20260702-5 — 本地模型 / LM Studio / Ollama 配置易错，测试连接失败时 UI 状态不友好
 
 - **现象**：
   - 用户配置本地模型 `http://192.168.110.51:1234` 后连接不上，点击测试连接后“直接黑掉，用不了”。
@@ -332,9 +355,17 @@
   - 输入 `http://192.168.110.51:1234/v1/models` 时能提示并修正为 `http://192.168.110.51:1234/v1`。
   - 输入完整 `/chat/completions` 不会重复拼接 endpoint。
   - 连接失败 / 超时 / CORS 后 UI 状态恢复，可继续编辑和重试。
-- **优先级**：🟠 中高（本地模型是传播期高频场景，失败会被理解为“软件不能用”）。
+- **修复记录（Codex 分支）**：
+  1. 新增 `src/lib/ai/openai-endpoint.ts`，统一规范化 OpenAI-compatible Base URL，识别 `/v1/models`、`/chat/completions`、`/embeddings`、重复 `/v1/v1` 等常见误填。
+  2. `src/lib/ai/client.ts` 与 `src/stores/ai-config.ts` 共用同一套 endpoint 构造，测试连接和真实生成不再各拼各的。
+  3. `testConnection()` 自动回写修正后的 Base URL，增加 15 秒超时，并在错误文案中提示 LM Studio / Ollama 应填 `/v1`。
+  4. `src/components/settings/AIConfigPanel.tsx` 加 LM Studio / Ollama 快捷填法；本地 / 自定义 provider 不再因 API Key 为空而禁用测试连接；测试按钮用 `finally` 恢复状态。
+- **验证证据**：
+  - `npx vitest run tests/regression/R-CF20260702-ai-config-endpoint.test.ts tests/regression/R-ai-config-storage.test.ts` ✅
+  - `npx tsc --noEmit` ✅
+- **优先级**：✅ 已处理；跨机器访问仍可能受防火墙 / CORS / 服务监听地址影响，需用户环境回测。
 
-## 🟠 CF-20260702-6 — 角色页面中文输入粘连 / 输入法组合态被打断
+## ✅ CF-20260702-6 — 角色页面中文输入粘连 / 输入法组合态被打断
 
 - **现象**：用户录屏显示在「角色生成 / 角色完整设计」页面输入中文时，文本框里出现拼音字母或重复粘连字符，输入体验异常。
 - **录屏信息**：`QQ20260702-100105.mp4`，约 9.5 秒，分辨率 1918×1018；截图显示问题发生在角色列表右侧的身份/职业/势力、年龄性别种族等字段。
@@ -357,7 +388,14 @@
   - Windows/Chrome 中文输入法下，在录屏同一页面连续输入中文，不出现拼音残留、重复字符、光标跳动。
   - macOS 拼音输入法下做同样冒烟验证。
   - 搜索 `src/components/character` 中裸 `input/textarea`，确认只剩复选框、隐藏字段或有明确豁免注释。
-- **优先级**：🟠 中高（高频编辑体验问题，影响角色设定主路径）。
+- **修复记录（Codex 分支）**：
+  1. 角色页文本输入统一替换为 `CInput/CTextarea`：`CharacterPanel`、`CharacterMinorPanel`、`CharacterDimensionFields`、`CharacterNPCPanel`、`CharacterExtraPanel`。
+  2. 保持原有样式和保存逻辑不变，只把 IME 组合期间的外部 `onChange` 延后到组合结束。
+  3. 回扫 `src/components/character`，剩余原生 `input` 仅为 checkbox。
+- **验证证据**：
+  - `rg "<input|<textarea" src/components/character -n` ✅ 仅剩 checkbox
+  - `npx tsc --noEmit` ✅
+- **优先级**：✅ 代码层已处理；Windows/Chrome 中文输入法仍需用户按原录屏路径回测。
 
 ## 🟡 CF-20260702-7 — 卷纲 / 章纲 / 正文生成需要“语言与依据”统一质量闸门
 
@@ -389,7 +427,7 @@
   - `npm run build` ✅
 - **优先级**：✅ 已处理（生产崩溃级；应优先合入并请用户回测同一录屏路径）。
 
-## 🟠 CF-20260702-9 — 角色驱动剧情与「故事设计 / 主线」联动不足，生成大纲时对主线影响弱
+## 🟠 CF-20260702-9 — 角色驱动剧情与「故事设计 / 主线」联动不足，生成大纲时对主线影响弱（底层已修，产品联动待确认）
 
 - **现象**：用户认为「角色驱动剧情」这个想法很好，但实际使用时，角色弧光反推出来的情节大纲经常和「故事设计」里的主线对不上；当两者不一致时，后续生成大纲似乎更听故事设计主线，角色驱动剧情对主线几乎没有影响。
 - **已确认代码定位**：
@@ -416,7 +454,16 @@
   - 构造角色目标与主线冲突的输入，输出预览必须给出冲突提示或调整建议。
   - 采纳“同步修订主线”时，`storyCore.mainPlot` 经 `adopt()` 更新，普通卷纲生成随后能读到更新后的主线。
   - 回归测试覆盖 adapter 组装、采纳写回、普通卷纲读取三段链路。
-- **优先级**：🟠 中高（功能理念正确，但当前和主线协同弱；会让用户觉得角色驱动是孤立功能）。
+- **修复记录（Codex 分支）**：
+  1. `src/lib/ai/character-driven-plot.ts` 改为经 `assembleContext()` 读取 `worldview / storyCore / powerSystem / codex / characters / worldRules / existingVolumeOutlines`，不再手拼世界观 / 词条 / 世界规则 store。
+  2. `storyCore` 注入改为来自注册表的完整故事核心块，覆盖 `logline / theme / centralConflict / plotPattern / mainPlot / storyLines / subPlots`。
+  3. prompt 追加“角色驱动与故事主线对齐硬约束”：不得另起主线，每卷说明推进主线阶段，每章 `arcProgress` 说明角色弧光如何推进本卷主线；冲突时标注冲突点与调整建议。
+  4. 同步加入 CF-20260702-2 的简体中文输出纪律。
+  5. 未擅自实现“采纳时改写 `storyCore.mainPlot`”或“新增角色驱动方案存储”，这两项涉及用户主线变更和新存储落点，需产品确认后走 `adopt()` / `PROJECT_TABLES` / `CONTEXT_SOURCES`。
+- **验证证据**：
+  - `npx vitest run tests/regression/R-CF20260702-character-driven-mainline.test.ts tests/regression/R-CF20260702-character-arc-autofill.test.ts` ✅
+  - `npx tsc --noEmit` ✅
+- **优先级**：🟠 底层主线对齐已处理；是否回写主线 / 暂存方案待确认。
 
 # ═══ 社区反馈批次（2026-06-30 · Windows 启动 / 细纲采纳 / 主线约束 / 主题可读性）═══
 

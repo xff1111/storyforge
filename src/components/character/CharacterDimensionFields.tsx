@@ -1,5 +1,6 @@
 import type { Character } from '../../lib/types'
 import { dimensionsByGroup, type CharacterDimensionKey } from '../../lib/character/character-dimensions'
+import { CTextarea } from '../shared/CompositionInput'
 
 interface Props {
   character: Character
@@ -27,7 +28,7 @@ export default function CharacterDimensionFields({ character, onChange, exclude 
               {shown.map(d => (
                 <div key={d.key} className="flex gap-2">
                   <span className="w-20 flex-shrink-0 pt-1.5 text-xs text-text-muted">{d.label}</span>
-                  <textarea
+                  <CTextarea
                     value={(character[d.key] as string) || ''}
                     onChange={e => onChange({ [d.key]: e.target.value } as Partial<Character>)}
                     placeholder={`${d.label}…`}

@@ -3,6 +3,7 @@ import { AIError } from '../types'
 import { createLog, updateLog, type TokenUsage } from './logger'
 import { recordUsage } from './usage-log'
 import { trimMessagesToFit } from './context-budget'
+import { buildOpenAIEndpoint } from './openai-endpoint'
 
 /** 调用元信息（用于消耗统计分类） */
 export interface AICallMeta {
@@ -25,9 +26,6 @@ export interface ChatResult {
  * 根据 provider 构造请求 URL 和 headers
  */
 function buildRequest(config: AIConfig, messages: ChatMessage[], stream: boolean) {
-  // 标准化 baseUrl：去除尾部斜杠
-  const baseUrl = config.baseUrl.replace(/\/+$/, '')
-
   // 基础请求体：所有 provider 都需要的字段
   const body: Record<string, unknown> = {
     model: config.model,
@@ -70,7 +68,7 @@ function buildRequest(config: AIConfig, messages: ChatMessage[], stream: boolean
   }
 
   return {
-    url: `${baseUrl}/chat/completions`,
+    url: buildOpenAIEndpoint(config.baseUrl, 'chat/completions'),
     headers: {
       'Content-Type': 'application/json',
       'Authorization': `Bearer ${config.apiKey}`,

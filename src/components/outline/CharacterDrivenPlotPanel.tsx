@@ -28,6 +28,17 @@ interface Props {
   project: Project
 }
 
+export function applyCharacterArcAutoFill(
+  arc: CharacterArcInput,
+  character: { background?: string; arc?: string },
+): CharacterArcInput {
+  return {
+    ...arc,
+    initialState: arc.initialState || character.background || '',
+    targetState: arc.targetState || character.arc || '',
+  }
+}
+
 export default function CharacterDrivenPlotPanel({ project }: Props) {
   const { characters, loadAll: loadChars } = useCharacterStore()
   const { nodes, loadAll: loadOutline, addNode } = useOutlineStore()
@@ -71,13 +82,7 @@ export default function CharacterDrivenPlotPanel({ project }: Props) {
     const arc = arcs[index]
     const ch = characters.find(c => c.id === arc.characterId)
     if (!ch) return
-    const updates = { ...arc }
-    if (!updates.initialState && ch.background) {
-      updates.initialState = ch.background.slice(0, 200)
-    }
-    if (!updates.targetState && ch.arc) {
-      updates.targetState = ch.arc.slice(0, 200)
-    }
+    const updates = applyCharacterArcAutoFill(arc, ch)
     setArcs(prev => prev.map((a, i) => i === index ? updates : a))
   }
 

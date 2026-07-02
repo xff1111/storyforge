@@ -5,6 +5,7 @@ import {
   CONTINUITY_CORE_END,
   CONTINUITY_CORE_START,
 } from '../chapter-memory/continuity-envelope'
+import { appendSimplifiedChineseOutputConstraint } from './prompt-guards'
 
 export interface RunOptions {
   parameterValues?: Record<string, unknown>
@@ -129,9 +130,10 @@ export function buildChapterContentPrompt(
     continuity: options?.continuity,
     budgetTokens: options?.continuityBudgetTokens,
   })
+  const guarded = appendSimplifiedChineseOutputConstraint(messages)
   return options?.skipContinuityEnvelope
-    ? messages
-    : injectContinuityEnvelope(messages, tpl.continuityMode, envelope)
+    ? guarded
+    : injectContinuityEnvelope(guarded, tpl.continuityMode, envelope)
 }
 
 export function buildContinuePrompt(
@@ -157,9 +159,10 @@ export function buildContinuePrompt(
     currentDraftTail: existingContent.slice(-1600),
     budgetTokens: options?.continuityBudgetTokens,
   })
+  const guarded = appendSimplifiedChineseOutputConstraint(messages)
   return options?.skipContinuityEnvelope
-    ? messages
-    : injectContinuityEnvelope(messages, tpl.continuityMode, envelope)
+    ? guarded
+    : injectContinuityEnvelope(guarded, tpl.continuityMode, envelope)
 }
 
 export function buildPolishPrompt(text: string, instruction: string, options?: RunOptions): ChatMessage[] {

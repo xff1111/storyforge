@@ -390,28 +390,50 @@ export const GENRE_METADATA: GenreMetadata[] = [
   },
 ]
 
+const GENRE_METADATA_ALIASES: Record<string, string> = {
+  kehuan: 'scifi',
+  qihuan: 'xifan',
+  xifang: 'xifan',
+  shishi: 'xifan',
+  heian: 'xifan',
+}
+
+export function normalizeGenreMetadataId(genreId: string): string {
+  return GENRE_METADATA_ALIASES[genreId] ?? genreId
+}
+
 /**
  * 根据题材 ID 获取元数据
  */
 export function getGenreMetadata(genreId: string): GenreMetadata | undefined {
-  return GENRE_METADATA.find(g => g.id === genreId)
+  const normalized = normalizeGenreMetadataId(genreId)
+  return GENRE_METADATA.find(g => g.id === normalized)
 }
 
 /**
  * 构建题材约束上下文（注入 AI prompt）
  */
-export function buildGenreConstraintContext(genreId: string): string {
-  const meta = getGenreMetadata(genreId)
-  if (!meta) return ''
-
-  const parts: string[] = [`【题材约束：${meta.label}】`]
-
-  if (meta.antiPatterns.length > 0) {
-    parts.push(`反模式（请避免）：${meta.antiPatterns.join('；')}`)
+export function buildGenreConstraintContext(genreIds: string | string[]): string {
+  const ids = (Array.isArray(genreIds) ? genreIds : [genreIds])
+    .map(id => id.trim())
+    .filter(Boolean)
+  const metas = new Map<string, GenreMetadata>()
+  for (const id of ids) {
+    const meta = getGenreMetadata(id)
+    if (meta) metas.set(meta.id, meta)
   }
-  if (meta.pacingStrategy) {
-    parts.push(`节奏策略：${meta.pacingStrategy}`)
-  }
+  if (metas.size === 0) return ''
 
-  return parts.join('\n')
+  return Array.from(metas.values()).map(meta => {
+    const parts: string[] = [`【题材约束：${meta.label}】`]
+
+    if (meta.antiPatterns.length > 0) {
+      parts.push(`反模式（请避免）：${meta.antiPatterns.join('；')}`)
+    }
+    if (meta.pacingStrategy) {
+      parts.push(`节奏策略：${meta.pacingStrategy}`)
+    }
+
+    return parts.join('\n')
+  }).join('\n\n')
 }

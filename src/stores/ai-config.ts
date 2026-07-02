@@ -3,6 +3,7 @@ import type { AIConfig, AIProvider, AIConfigPreset, EmbeddingConfig } from '../l
 import { PROVIDER_PRESETS } from '../lib/types'
 import { createLog, updateLog } from '../lib/ai/logger'
 import { nanoid } from '../lib/utils/id'
+import { buildOpenAIEndpoint, normalizeOpenAIBaseUrl } from '../lib/ai/openai-endpoint'
 
 const STORAGE_KEY = 'storyforge-ai-config'
 const PRESETS_KEY = 'storyforge-ai-presets'
@@ -262,10 +263,16 @@ export const useAIConfigStore = create<AIConfigStore>((set, get) => ({
 
   testConnection: async (): Promise<TestResult> => {
     const { config } = get()
-    // 标准化 baseUrl：去除尾部斜杠
-    const baseUrl = config.baseUrl.replace(/\/+$/, '')
-    const url = `${baseUrl}/chat/completions`
+    const normalized = normalizeOpenAIBaseUrl(config.baseUrl)
+    if (normalized.changed) {
+      const newConfig = { ...config, baseUrl: normalized.baseUrl }
+      persistConfig(newConfig, get().rememberApiKey)
+      set({ config: newConfig, activePresetId: null })
+    }
+    const url = buildOpenAIEndpoint(normalized.baseUrl, 'chat/completions')
     const startTime = Date.now()
+    const controller = new AbortController()
+    const timeoutId = window.setTimeout(() => controller.abort(), 15_000)
 
     // 创建日志
     const log = createLog({
@@ -279,6 +286,7 @@ export const useAIConfigStore = create<AIConfigStore>((set, get) => ({
     try {
       const response = await fetch(url, {
         method: 'POST',
+        signal: controller.signal,
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${config.apiKey}`,
@@ -294,7 +302,8 @@ export const useAIConfigStore = create<AIConfigStore>((set, get) => ({
 
       if (response.ok) {
         updateLog(log.id, { status: 'success', statusCode: response.status, duration, responseBody: bodyText.slice(0, 200) })
-        return { ok: true, message: '✅ 连接成功', statusCode: response.status, duration }
+        const prefix = normalized.warnings.length ? `${normalized.warnings.join(' ')} ` : ''
+        return { ok: true, message: `✅ ${prefix}连接成功`, statusCode: response.status, duration }
       }
 
       // 解析错误信息
@@ -315,10 +324,17 @@ export const useAIConfigStore = create<AIConfigStore>((set, get) => ({
       if (response.status === 402) {
         const msg = `${rawErrorMsg}（${cnExplanation}）`
         updateLog(log.id, { status: 'success', statusCode: response.status, duration, responseBody: bodyText.slice(0, 200) })
-        return { ok: true, message: `✅ 连接成功 — ${msg}`, statusCode: response.status, duration }
+        const prefix = normalized.warnings.length ? `${normalized.warnings.join(' ')} ` : ''
+        return { ok: true, message: `✅ ${prefix}连接成功 — ${msg}`, statusCode: response.status, duration }
       }
 
-      const errorMsg = cnExplanation ? `${rawErrorMsg}（${cnExplanation}）` : rawErrorMsg
+      const urlHint = normalized.warnings.length
+        ? `；${normalized.warnings.join(' ')}`
+        : ''
+      const localHint = ['custom', 'ollama'].includes(config.provider)
+        ? '；本地 OpenAI 兼容服务的 Base URL 通常应填到 /v1，例如 LM Studio: http://主机:1234/v1，Ollama: http://localhost:11434/v1'
+        : ''
+      const errorMsg = `${cnExplanation ? `${rawErrorMsg}（${cnExplanation}）` : rawErrorMsg}${urlHint}${localHint}`
 
       updateLog(log.id, { status: 'error', statusCode: response.status, duration, errorMessage: errorMsg, responseBody: bodyText.slice(0, 500) })
       return { ok: false, message: `❌ ${errorMsg}`, statusCode: response.status, duration }
@@ -338,6 +354,8 @@ export const useAIConfigStore = create<AIConfigStore>((set, get) => ({
 
       updateLog(log.id, { status: 'error', duration, errorMessage: errorMsg })
       return { ok: false, message: `❌ ${errorMsg}`, duration }
+    } finally {
+      window.clearTimeout(timeoutId)
     }
   },
 }))

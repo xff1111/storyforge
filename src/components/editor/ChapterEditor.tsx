@@ -351,7 +351,7 @@ export default function ChapterEditor({ project, outlineNodeId }: Props) {
     console.log(`[assembleContext] ${taskType} 模式 — included:${assembled.included.join(',')} trimmed:${assembled.trimmed.join(',') || 'none'} tokens:${assembled.totalInputTokens}`)
 
     // Phase E: 题材约束 + 写作风格注入
-    const genreCtx = buildGenreConstraintContext(project.genre)
+    const genreCtx = buildGenreConstraintContext(project.genres?.length ? project.genres : project.genre)
     const styleCtx = project.writingStyleId ? buildStylePromptInjection(project.writingStyleId) : ''
 
     const segmentFor = (key: string) => {
