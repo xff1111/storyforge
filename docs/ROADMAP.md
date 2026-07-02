@@ -214,7 +214,7 @@
 # ═══ 社区反馈批次（2026-07-02 · 角色弧光 / 生成一致性 / 本地模型 / 输入法 / 流派约束）═══
 
 > **来源**：2026-07-02 群内用户截图 + 录屏，附件包括 `QQ20260702-100105.mp4` 与 7 张截图。
-> **当前状态**：已做只读定位，尚未实现修复。以下条目进入待开发池，后续按分支 + PR 处理。
+> **当前状态**：CF-20260702-8 已定位并在 `codex/community-feedback-20260702` 分支修复；其余条目已做只读定位，尚未实现修复。以下未完成条目进入待开发池，后续按分支 + PR 处理。
 > **铁律复述**：① AI 读上下文必须经 `CONTEXT_SOURCES / assembleContext()`；② AI 写回必须经 `FIELD_REGISTRY / ADOPTION_SCHEMA / adopt()`；③ 涉及表/字段/生命周期改动必须同步 `PROJECT_TABLES`；④ 本批中“显示不全 / 输入粘连 / 设置连接失败”可先做 UI 修复，但任何 AI 生成链路调整不得绕过三注册表。
 
 ## 附件索引
@@ -228,6 +228,7 @@
 | `codex-clipboard-6309fef7-74e6-4051-b5de-c0b9aa29c6d3.png` | 本地模型 / 自定义 OpenAI 连接失败，测试连接黑掉不可用 |
 | `codex-clipboard-95873579-1794-45e5-9123-46f5fb3ef50d.png` | LM Studio / Ollama 正确配置示例与用户自测成功 |
 | `codex-clipboard-94c2a463-230f-4697-98a6-9dca5f6f053e.png` + `QQ20260702-100105.mp4` | 角色页面中文输入粘连，录屏约 9.5 秒，分辨率 1918×1018 |
+| `codex-clipboard-8c744fc3-e073-4819-b745-74489e6d7e25.png` + `QQ20260702-110550.mp4` | v3.7.2 纯点击进入大纲后崩溃，错误为 `Cannot read properties of undefined (reading 'trim')` |
 
 ## 🔴 CF-20260702-1 — 角色弧光自动填充被硬截断，文字多时“不全”
 
@@ -366,6 +367,26 @@
   3. 检查失败不强制阻断，但给出“重试 / 修正后采纳 / 仍然采纳”的选择。
   4. 该闸门优先覆盖三条主链路：卷纲、章纲、正文。
 - **优先级**：🟡 中（不是单点 bug，但能系统性降低同类反馈复发）。
+
+## ✅ CF-20260702-8 — v3.7.2 纯点击进入大纲崩溃：`Cannot read properties of undefined (reading 'trim')`
+
+- **现象**：用户录屏从工作区左侧纯点击切换页面，进入「创作区 → 大纲」后错误边界页出现，未触发 AI、未采纳、未编辑。录屏第 8 秒错误信息为 `Cannot read properties of undefined (reading 'trim')`。
+- **已确认代码定位**：
+  - `src/components/outline/OutlinePanel.tsx` 渲染期存在 `selectedVol.summary.trim()`、`ch.summary.trim()` 等调用。
+  - `src/lib/db/schema.ts` v34 已注释并修过同类历史问题：老数据 / 跨版本导入可能使 `outlineNodes.summary` 缺失，进入大纲后 `summary.trim()` 崩。
+  - 当前仍有运行时写入缺口：`adopt({ target:'outlineNodes' })` 只要求 `type/title`，未在集合写入时套用 `PROJECT_TABLES.defaults`，因此某些 AI/结构化采纳路径仍可能新造缺 `summary` 的大纲节点。
+- **根因判断**：大纲节点 `summary` 的“恒为 string”不变量没有在所有写入/读取边界收口。只要 IndexedDB 中存在一条 `summary === undefined` 的卷或章，纯点击进入大纲页就会在渲染时崩溃。
+- **修复记录（Codex 分支）**：
+  1. `src/stores/outline.ts` 新增 `normalizeOutlineNode()`：`loadAll/addNode/addNodes/updateNode/reorderNodes` 统一把 `summary` 兜成 `''`、`parentId` 兜成 `null`、`title/order` 做基础归一。
+  2. `src/lib/registry/adopt.ts` 在集合写入 `normalizeAndValidate()` 后统一套 `PROJECT_TABLES.defaults`，让 `outlineNodes.summary` 通过注册表默认值兜底，不再新造脏节点。
+  3. `tests/regression/R-FB10-volume-adopt.test.ts` 增加两个回归：adopt 缺 summary 时落库为空串；store.loadAll 读取旧脏节点后 `summary.trim()` 安全。
+- **验证证据**：
+  - `npx vitest run tests/regression/R-FB10-volume-adopt.test.ts` ✅ 7 tests passed
+  - `npx tsc --noEmit` ✅
+  - `npm run check:architecture` ✅
+  - `npm run check:required-tables` ✅
+  - `npm run build` ✅
+- **优先级**：✅ 已处理（生产崩溃级；应优先合入并请用户回测同一录屏路径）。
 
 # ═══ 社区反馈批次（2026-06-30 · Windows 启动 / 细纲采纳 / 主线约束 / 主题可读性）═══
 

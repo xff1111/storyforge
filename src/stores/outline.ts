@@ -25,6 +25,16 @@ interface OutlineStore {
 
 const now = () => Date.now()
 
+function normalizeOutlineNode(node: OutlineNode): OutlineNode {
+  return {
+    ...node,
+    parentId: node.parentId ?? null,
+    title: String(node.title ?? ''),
+    summary: String(node.summary ?? ''),
+    order: Number.isFinite(Number(node.order)) ? Number(node.order) : 0,
+  }
+}
+
 export const useOutlineStore = create<OutlineStore>((set, get) => ({
   nodes: [],
   loading: false,
@@ -34,11 +44,11 @@ export const useOutlineStore = create<OutlineStore>((set, get) => ({
     const nodes = await db.outlineNodes
       .where('projectId').equals(projectId)
       .sortBy('order')
-    set({ nodes, loading: false })
+    set({ nodes: nodes.map(normalizeOutlineNode), loading: false })
   },
 
   addNode: async (node) => {
-    const newNode: OutlineNode = { ...node, createdAt: now(), updatedAt: now() }
+    const newNode: OutlineNode = normalizeOutlineNode({ ...node, createdAt: now(), updatedAt: now() } as OutlineNode)
     const id = await db.outlineNodes.add(newNode) as number
     set({ nodes: [...get().nodes, { ...newNode, id }] })
     return id
@@ -48,7 +58,7 @@ export const useOutlineStore = create<OutlineStore>((set, get) => ({
     await db.outlineNodes.update(id, { ...data, updatedAt: now() })
     set({
       nodes: get().nodes.map(n =>
-        n.id === id ? { ...n, ...data, updatedAt: now() } : n
+        n.id === id ? normalizeOutlineNode({ ...n, ...data, updatedAt: now() }) : n
       ),
     })
   },
@@ -71,7 +81,7 @@ export const useOutlineStore = create<OutlineStore>((set, get) => ({
   },
 
   addNodes: async (nodes) => {
-    const newNodes = nodes.map(n => ({ ...n, createdAt: now(), updatedAt: now() }))
+    const newNodes = nodes.map(n => normalizeOutlineNode({ ...n, createdAt: now(), updatedAt: now() } as OutlineNode))
     const ids = await db.outlineNodes.bulkAdd(newNodes, { allKeys: true }) as number[]
     const withIds = newNodes.map((n, i) => ({ ...n, id: ids[i] }))
     set({ nodes: [...get().nodes, ...withIds] })
@@ -88,7 +98,7 @@ export const useOutlineStore = create<OutlineStore>((set, get) => ({
     set({
       nodes: get().nodes.map(n =>
         n.id != null && orderById.has(n.id)
-          ? { ...n, order: orderById.get(n.id)!, updatedAt: ts }
+          ? normalizeOutlineNode({ ...n, order: orderById.get(n.id)!, updatedAt: ts })
           : n,
       ),
     })

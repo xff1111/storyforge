@@ -218,6 +218,7 @@ async function adoptCollection(
   for (const raw of items) {
     let item = normalizeAndValidate(raw, fieldSpecs, result)
     if (!item) continue
+    item = applyTableDefaults(item, tableSpec)
     if (input.target === 'characters') item = normalizeCharacterAxes(item)
     if (!applyRequired(item, raw, adoption, result)) continue
     if (!await applyFkChecks(item, raw, adoption, result)) continue
@@ -249,6 +250,10 @@ async function adoptCollection(
     }
   }
   return result
+}
+
+function applyTableDefaults(item: Record<string, unknown>, tableSpec: TableSpec): Record<string, unknown> {
+  return tableSpec.defaults ? { ...tableSpec.defaults, ...item } : item
 }
 
 function normalizeAndValidate(
