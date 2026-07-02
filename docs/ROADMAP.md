@@ -4,7 +4,7 @@
 > 📐 **施工权威**: [`docs/MASTER-BLUEPRINT.md`](MASTER-BLUEPRINT.md) — 重构 Phase 0/1/2/3 完整流程
 > 🤝 **双 Agent 协作契约**: [`docs/COLLAB-WORKFLOW.md`](COLLAB-WORKFLOW.md) — Codex 开发 / Claude 审查的分工·分支·合并纪律。**Codex 请过目并在文末 §7 确认。**
 >
-> **最后更新**: 2026-06-30（追加社区反馈待修复批次：Windows 启动、细纲采纳、故事主线约束、主题可读性等；施工权威见 MASTER-BLUEPRINT）
+> **最后更新**: 2026-07-02（追加社区反馈待开发批次：角色弧光自动填充、英文混入、卷纲依据、本地模型配置、中文输入粘连、流派 ID 约束等；施工权威见 MASTER-BLUEPRINT）
 > **说明**: 本文档是唯一的功能规划文档。旧文档已归档至 `docs/archive/`。
 > **结构**: 上半部分「已完成」，下半部分「待开发」按优先级排列。完成后从待办挪到已完成区。
 > **重要**: 任何"加功能 / 修 bug"前，先过 CLAUDE.md 的「四问」。**头疼医头 = 永远拒绝**。
@@ -210,6 +210,162 @@
 > 本 ROADMAP 中所有"架构地基级"任务均已纳入 MASTER-BLUEPRINT 的 Phase 0/1/2/3，本节保留索引但不再独立维护。
 
 ---
+
+# ═══ 社区反馈批次（2026-07-02 · 角色弧光 / 生成一致性 / 本地模型 / 输入法 / 流派约束）═══
+
+> **来源**：2026-07-02 群内用户截图 + 录屏，附件包括 `QQ20260702-100105.mp4` 与 7 张截图。
+> **当前状态**：已做只读定位，尚未实现修复。以下条目进入待开发池，后续按分支 + PR 处理。
+> **铁律复述**：① AI 读上下文必须经 `CONTEXT_SOURCES / assembleContext()`；② AI 写回必须经 `FIELD_REGISTRY / ADOPTION_SCHEMA / adopt()`；③ 涉及表/字段/生命周期改动必须同步 `PROJECT_TABLES`；④ 本批中“显示不全 / 输入粘连 / 设置连接失败”可先做 UI 修复，但任何 AI 生成链路调整不得绕过三注册表。
+
+## 附件索引
+
+| 附件 | 反馈点 |
+|---|---|
+| `codex-clipboard-ebe70d9e-3add-4825-9557-1c04090c5547.png` | 角色驱动剧情：角色弧光自动填充文字多时填不全 |
+| `codex-clipboard-9d22f638-3ecf-4e8e-9c7b-04f1dfcc7abb.png` | 章节目标 / 正文生成混入英文 |
+| `codex-clipboard-9313a81a-c5b7-4ee2-acd6-5f01a06a5c4b.png` | 卷纲生成内容像随机抽卡，和灵感对不上 |
+| `codex-clipboard-fa9527a3-333b-436a-be24-a55973baf84a.png` | 流派 ID mismatch 导致题材元数据约束未注入 |
+| `codex-clipboard-6309fef7-74e6-4051-b5de-c0b9aa29c6d3.png` | 本地模型 / 自定义 OpenAI 连接失败，测试连接黑掉不可用 |
+| `codex-clipboard-95873579-1794-45e5-9123-46f5fb3ef50d.png` | LM Studio / Ollama 正确配置示例与用户自测成功 |
+| `codex-clipboard-94c2a463-230f-4697-98a6-9dca5f6f053e.png` + `QQ20260702-100105.mp4` | 角色页面中文输入粘连，录屏约 9.5 秒，分辨率 1918×1018 |
+
+## 🔴 CF-20260702-1 — 角色弧光自动填充被硬截断，文字多时“不全”
+
+- **现象**：在「故事设计 → 角色驱动 → 角色弧光设定」里点击“自动填充”，用户已有角色背景 / 弧光较长时，只填入前面一小段。
+- **已确认代码定位**：
+  - `src/components/outline/CharacterDrivenPlotPanel.tsx`
+  - `handleAutoFill()` 中 `ch.background.slice(0, 200)` 写入起始状态，`ch.arc.slice(0, 200)` 写入目标状态。
+  - 下方弧光方向预览另有 `slice(0, 30)`，这是预览截断，不是写入截断；真正导致用户内容丢失的是 200 字硬截断。
+- **根因判断**：这是明确的 UI 逻辑 bug，不是模型问题。自动填充在写入本地弧光输入框前主动丢弃了后文。
+- **修复方案**：
+  1. 移除 `slice(0, 200)`，默认完整填入 `background / arc`；只在视觉层用折叠、最大高度或预览省略控制展示。
+  2. 自动填充前若目标框已有用户手写内容，弹出“覆盖 / 追加 / 取消”选择，避免无意覆盖。
+  3. 对很长角色卡可加“提炼填充”二级按钮：通过 AI 把背景/弧光压缩为可执行的状态描述；该 AI 读取必须经 `assembleContext()` 或明确登记对应 source，写回仍只写当前临时输入，不直接落库。
+  4. 保留弧光方向预览的短截断，但增加 `title` 或展开查看，避免误以为正文被截。
+- **验证要求**：
+  - 构造角色 `background / arc` 均超过 500 字，自动填充后输入框完整包含后文关键句。
+  - 已有手写内容时不会被静默覆盖。
+  - `npx tsc --noEmit`、相关组件测试 / 手动浏览器验证。
+- **优先级**：🔴 高（用户已有设定被静默截断，直接影响后续生成质量）。
+
+## 🔴 CF-20260702-2 — 章节目标 / 正文生成混入英文，且存在英文空格异常
+
+- **现象**：章节目标显示“第1章：初入江湖”后，正文/目标中出现 `主角 enters a mysterious world...` 等英文片段；另有正文片段“tangledfuture”这类英文空格缺失，用户连续追问“为什么变成英文了 / 带一点英文是什么情况”。
+- **初步定位**：
+  - 章纲 / 章节正文链路：`src/components/outline/OutlinePanel.tsx`、`src/lib/ai/adapters/outline-adapter.ts`、`src/components/editor/ChapterEditor.tsx`、`src/lib/ai/adapters/chapter-adapter.ts`。
+  - 当前章节生成会注入 `chapterSummary`；如果章纲阶段已混入英文，正文阶段会继续继承。
+  - 现有 prompt 对“中文输出”的硬约束不够统一，部分内置/题材包模板里有英文变量名和英文 key，模型可能受污染；用户自定义模型/本地模型更容易跑偏。
+- **风险判断**：这是生成链路质量问题，可能发生在“卷纲/章纲生成”或“正文生成”任一阶段；若被采纳入大纲，会成为后续章节的长期污染源。
+- **修复方案**：
+  1. 在 `outline.volume`、`outline.chapter`、`chapter.content` 三条主链路统一追加语言硬约束：除专名/用户原文要求外，输出必须为简体中文；不得中英夹杂；不得把变量名或英文示例写进结果。
+  2. 增加生成结果采纳前的轻量语言检测：当中文项目中英文比例异常或出现整句英文时，提示“检测到英文混入，建议重试/转中文后采纳”，避免污染大纲。
+  3. 检查 prompt seeds 和题材包模板，删除不必要英文示例；必须保留 JSON key 的位置要明确“key 用英文，value 用中文”。
+  4. 正文生成前如果 `chapterSummary` 已含英文句子，给出清理提示或提供“一键转中文章纲”动作；该动作写回章纲必须走 `adopt()`。
+- **验证要求**：
+  - 单测 prompt：三条主链路最终 messages 必须含“简体中文 / 不得中英夹杂”等约束。
+  - 构造含英文污染的章纲，正文生成前能提示或清理。
+  - 至少用一个 OpenAI-compatible 本地模型验证不再输出英文目标句。
+- **优先级**：🔴 高（核心输出语言错误，会污染大纲和正文）。
+
+## 🔴 CF-20260702-3 — 卷纲生成依据不可见，且可能与灵感 / 故事核心脱节
+
+- **现象**：用户问“卷纲的生成是以什么为依据的，还是就是随机的？”并反馈“卷纲生成的内容完全和灵感对不上号 / 像抽卡”。
+- **当前代码观察**：
+  - `OutlinePanel` 已通过 `assembleContext()` 读取 `worldview / storyCore / powerSystem / codex / characters / creativeRules / worldRules / historical / locations / existingVolumeOutlines`。
+  - `buildVolumeOutlinePrompt()` 已有“主线一致性硬约束”，会在 `storyCoreContext` 非空时要求服从故事核心 / 主线。
+  - 但“原始灵感”本身不在卷纲 sourceKeys 中；如果用户只在灵感反推输入框写过灵感、但未采纳为 `storyCore/worldview/characters`，卷纲不会知道那段原始灵感。
+  - UI 也没有告诉用户本次生成实际读取了哪些资料，用户只能从结果猜。
+- **根因判断**：
+  - 一类是数据流问题：灵感没有被采纳入注册表字段，卷纲自然读不到。
+  - 一类是可解释性问题：即使读到了 `storyCore`，用户也看不到“本次依据”，会误判为随机。
+  - 还需复核工作流 / 极速起书链路是否绕开了 `OutlinePanel` 的同等主线约束。
+- **修复方案**：
+  1. 在卷纲生成确认面板显示“本次生成依据”：列出 `assembleContext().included`，并展示故事主线 / 核心冲突 / 已有卷等关键摘要。
+  2. 如果 `storyCore.mainPlot` 为空但存在灵感反推草稿或未采纳结果，提示用户“卷纲不会读取未采纳灵感，请先采纳故事核心或粘贴到额外要求”。
+  3. 如产品决定保留原始灵感历史，则新增正式 source（例如 `inspirationFragments`），并按三注册表补齐存储、导出/导入、生命周期；不能从 `localStorage` 草稿绕读。
+  4. 采纳前增加“主线对齐检查”：每卷 summary 必须标注推进主线的哪一段；空泛或脱节时提醒重试。
+- **验证要求**：
+  - 有 `storyCore.mainPlot` 时，卷纲生成依据面板能明确展示主线文本。
+  - 只有未采纳灵感、无 storyCore 时，UI 必须提示“未采纳灵感不会进入生成上下文”。
+  - 工作流链路与手动卷纲链路的 sourceKeys / 主线约束一致。
+- **优先级**：🔴 高（核心规划阶段失控，用户会认为 AI 随机创作）。
+
+## 🔴 CF-20260702-4 — 流派选择 ID 与 `GENRE_METADATA` 不一致，导致题材约束静默失效
+
+- **现象**：群内用户用外部模型指出流派 ID mismatch：弹窗里“科幻 = `kehuan`”，但 `GENRE_METADATA` 使用 `scifi`；“奇幻 = `qihuan`”，但元数据使用 `xifan`。用户询问能否按该分析检查“流派”定义。
+- **已确认代码定位**：
+  - `src/lib/types/project.ts`：`GENRE_OPTIONS` 中科幻为 `kehuan`，奇幻为 `qihuan`，西方魔幻为 `xifang`。
+  - `src/lib/ai/genre-metadata.ts`：元数据中科幻为 `scifi`，西幻/奇幻为 `xifan`。
+  - `src/components/editor/ChapterEditor.tsx`：正文生成只调用 `buildGenreConstraintContext(project.genre)`，未处理 `project.genres[]` 多选。
+- **根因判断**：这是确定的静默失效 bug。用户在 UI 选择常规流派后，正文生成的题材约束可能为空；多选流派下也只看单个旧字段。
+- **修复方案**：
+  1. 不直接改已有项目保存值，避免破坏历史数据；新增 canonical/alias 映射，例如 `kehuan -> scifi`、`qihuan/xifang -> xifan`，并允许多个 UI 子类映射到一个元数据。
+  2. `buildGenreConstraintContext()` 支持单个 ID 和 ID 数组，合并 `project.genres[]` 的元数据约束；旧 `project.genre` 仅作为 fallback。
+  3. 为 `GENRE_OPTIONS.value` 建覆盖测试：每个可选流派要么映射到元数据，要么列入显式 no-metadata 白名单，禁止静默空。
+  4. 在项目设置 / 生成参数中显示当前已生效的题材约束标签，便于用户理解流派不是“只挂了个标签”。
+- **验证要求**：
+  - `kehuan` 能注入科幻约束；`qihuan`/`xifang` 能注入奇幻/西幻约束。
+  - 多选 `['kehuan','moshi']` 时能同时注入科幻与末世约束。
+  - 旧项目 `project.genre` 仍兼容，不需要迁移清库。
+- **优先级**：🔴 高（题材选择是全局核心参数，当前可能只显示不生效）。
+
+## 🟠 CF-20260702-5 — 本地模型 / LM Studio / Ollama 配置易错，测试连接失败时 UI 状态不友好
+
+- **现象**：
+  - 用户配置本地模型 `http://192.168.110.51:1234` 后连接不上，点击测试连接后“直接黑掉，用不了”。
+  - 后续群内给出正确配置：LM Studio 应选择 OpenAI/OpenAI Compatible/custom OpenAI，Base URL 填 `http://192.168.110.51:1234/v1`，API Key 可填 `lm-studio`，模型名如 `qwen3-14b`；不要选 `ollama`，不要填 `/v1/models` 或 `/chat/completions`。
+  - 另有用户用 Ollama 成功：`http://localhost:11434/v1` + `gemma4-heretic:latest`。
+- **已确认代码定位**：
+  - `src/stores/ai-config.ts` 的 `testConnection()` 只去掉尾部斜杠，然后固定请求 `${baseUrl}/chat/completions`。
+  - 如果用户把 Base URL 填为 `/v1/models` 或完整 `/chat/completions`，会拼成错误 endpoint。
+  - `src/components/settings/AIConfigPanel.tsx` 需复核 loading / disabled / error 展示，避免连接失败后让按钮或表单长期不可用。
+- **根因判断**：配置模型为 OpenAI-compatible 的用户不知道 Base URL 应填“根路径 `/v1`”，而系统没有自动纠错；错误状态文案也没有直接告诉用户应填什么。
+- **修复方案**：
+  1. 增加“LM Studio（OpenAI 兼容）”和“Ollama（OpenAI 兼容）”本地预设，自动填 baseUrl、默认 apiKey、示例模型名。
+  2. 对 Base URL 做规范化和校验：识别并拦截 `/models`、`/chat/completions`、重复 `/v1/v1` 等常见错误，给出一键修正。
+  3. `testConnection()` 加超时和 finally 状态恢复，失败后测试按钮、日志按钮、输入框不能卡死或黑掉。
+  4. 连接失败文案按 provider 给出可执行提示：LM Studio 用 `/v1`；Ollama 默认 `http://localhost:11434/v1`；跨机器访问时提示 CORS / 防火墙 / 监听地址。
+  5. 测试连接可优先 GET `/models` 辅助列出模型，再 POST `/chat/completions` 做真实验证；两步都写入日志。
+- **验证要求**：
+  - 输入 `http://192.168.110.51:1234/v1/models` 时能提示并修正为 `http://192.168.110.51:1234/v1`。
+  - 输入完整 `/chat/completions` 不会重复拼接 endpoint。
+  - 连接失败 / 超时 / CORS 后 UI 状态恢复，可继续编辑和重试。
+- **优先级**：🟠 中高（本地模型是传播期高频场景，失败会被理解为“软件不能用”）。
+
+## 🟠 CF-20260702-6 — 角色页面中文输入粘连 / 输入法组合态被打断
+
+- **现象**：用户录屏显示在「角色生成 / 角色完整设计」页面输入中文时，文本框里出现拼音字母或重复粘连字符，输入体验异常。
+- **录屏信息**：`QQ20260702-100105.mp4`，约 9.5 秒，分辨率 1918×1018；截图显示问题发生在角色列表右侧的身份/职业/势力、年龄性别种族等字段。
+- **已确认代码定位**：
+  - 仓库已有组合输入安全组件：`src/components/shared/CompositionInput.tsx` 的 `CInput/CTextarea`，以及 `AutoResizeTextarea`。
+  - 角色页面仍有多处原生受控 `input/textarea`：
+    - `src/components/character/CharacterMinorPanel.tsx`
+    - `src/components/character/CharacterDimensionFields.tsx`
+    - `src/components/character/CharacterNPCPanel.tsx`
+    - `src/components/character/CharacterExtraPanel.tsx`
+    - `src/components/character/CharacterPanel.tsx`
+  - 这些字段在中文 IME 组合期间每次 `onChange` 都同步更新外部 store，容易打断组合输入。
+- **根因判断**：高度疑似受控组件未使用组合输入保护；同类问题已在共享组件里有现成解法，但角色面板未统一替换。
+- **修复方案**：
+  1. 角色相关所有可编辑文本字段统一替换为 `CInput/CTextarea` 或 `AutoResizeTextarea`。
+  2. 对高频字段增加本地草稿 / blur 后保存或 debounce，减少每个拼音按键都写 store 的重渲染。
+  3. 制定输入组件规范：新增文本输入默认不得直接用原生受控 `input/textarea`，除非明确说明不涉及 IME。
+  4. 回扫其他高频编辑页（设定库、提示词参数、AI 配置）是否存在同类风险，分批替换。
+- **验证要求**：
+  - Windows/Chrome 中文输入法下，在录屏同一页面连续输入中文，不出现拼音残留、重复字符、光标跳动。
+  - macOS 拼音输入法下做同样冒烟验证。
+  - 搜索 `src/components/character` 中裸 `input/textarea`，确认只剩复选框、隐藏字段或有明确豁免注释。
+- **优先级**：🟠 中高（高频编辑体验问题，影响角色设定主路径）。
+
+## 🟡 CF-20260702-7 — 卷纲 / 章纲 / 正文生成需要“语言与依据”统一质量闸门
+
+- **现象归纳**：本批次的英文混入、卷纲随机感、流派约束失效，其实都指向同一个上游质量闸门不足：用户不知道 AI 读了什么，系统也没有在采纳前阻止明显偏题 / 偏语言 / 未套题材约束的结果。
+- **方案方向**：
+  1. 在生成面板统一展示“已读取上下文源 + 关键依据摘要 + 已生效流派/风格/世界规则”。
+  2. 采纳前做轻量质量检查：语言、主线一致性、题材约束是否命中、是否为空泛复述。
+  3. 检查失败不强制阻断，但给出“重试 / 修正后采纳 / 仍然采纳”的选择。
+  4. 该闸门优先覆盖三条主链路：卷纲、章纲、正文。
+- **优先级**：🟡 中（不是单点 bug，但能系统性降低同类反馈复发）。
 
 # ═══ 社区反馈批次（2026-06-30 · Windows 启动 / 细纲采纳 / 主线约束 / 主题可读性）═══
 
