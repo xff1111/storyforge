@@ -6,6 +6,7 @@ export default defineConfig({
   plugins: [
     react(),
     VitePWA({
+      injectRegister: null,
       registerType: 'autoUpdate',
       base: '/storyforge/',
       scope: '/storyforge/',

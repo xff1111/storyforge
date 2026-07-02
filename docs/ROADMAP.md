@@ -646,6 +646,31 @@
   - 对“不可改章节”的保护级别是否需要强制锁定。Codex 建议第一版只作为 AI prompt 硬约束和 UI 提醒。
 - **优先级**：🟠 中高（角色驱动功能从开书工具升级为长篇连载中途可用的修订工具，但涉及正文安全，必须分阶段实施）。
 
+## 🔴 CF-20260702-13 — 本地 `.bat` / `.exe` 打开疯狂重定向，Service Worker 自愈无效
+
+- **现象**：用户用 `.bat` / `.exe` 启动本地构建后，浏览器在 `localhost:1111` 或 `127.0.0.1:1111` 反复重定向，页面打不开并报 `ERR_TOO_MANY_REDIRECTS`。此前已在 `index.html` 加过“注销 SW + 清 Cache Storage”的本地自愈脚本，但用户侧仍复发。
+- **根因判断（Claude 审核补充）**：
+  - 问题核心是 PWA Service Worker，不是 `.bat` / `.exe` 本身。
+  - SW 按源常驻，离线优先接管导航；一旦把错误重定向响应或旧导航 fallback 缓存下来，重启应用或重新打包也不会自动清掉。
+  - `.bat` 与 `.exe` 共用同一端口 / 源，一个坏 SW 劫持后两种入口都会中招。
+- **为什么旧自愈无效**：
+  1. `index.html` 里的 `navigator.serviceWorker.getRegistrations().forEach(unregister)` 会注销旧 SW，但 `vite-plugin-pwa` 默认自动注入 `registerSW.js`，同一次页面加载又把 SW 注册回来，等于“刚删又装”。
+  2. 自愈脚本住在 `index.html` 里；当重定向循环发生在导航阶段时，`index.html` 可能根本加载不到，自愈代码没有执行机会。
+- **修复方案（根治方向）**：
+  1. 本地运行禁用 SW 注册：`vite-plugin-pwa` 关闭自动注入（`injectRegister: null`），改为应用内手动注册；当 `location.hostname` 是 `localhost / 127.0.0.1 / ::1` 时直接 return，不注册任何 SW。
+  2. 线上仍保留 PWA：非本地主机名继续注册 `/storyforge/sw.js`，保持 Vercel 域名的离线能力与自动更新。
+  3. 保留并加固本地自愈脚本：注销 SW + 删除 Cache Storage 后，如果本页曾被 SW 控制，则用 `sessionStorage` 做一次性 reload 防抖，避免 reload 循环。数据红线不变：只清 SW 和 Cache Storage，绝不碰 IndexedDB / localStorage。
+  4. 打包侧建议（外部封装，不在本仓库 `package.json`）：启动器 / exe 直接打开 `http://localhost:1111/storyforge/`，不要打开根路径 `/`；若 exe 内置静态服务器托管 `dist/`，需按 `base=/storyforge/` 提供。
+- **验收标准**：
+  - 在 localhost 打开构建版，`navigator.serviceWorker.getRegistrations()` 返回空，`registerSW.js` 不再被自动注入/执行。
+  - 曾复现重定向的机器升级后一次打开即正常，必要时自愈触发一次 reload 后正常，不再循环。
+  - 线上 Vercel 域名仍正常注册 PWA / SW，离线能力不受影响。
+  - IndexedDB / localStorage 原样保留，有测试或手测证据证明自愈只动 SW 和 Cache Storage。
+- **风险**：
+  - SW 注册逻辑影响线上 PWA，必须用 hostname 严格区分本地 / 线上。
+  - 自愈 reload 必须用 `sessionStorage` 防抖，禁止形成新的 reload 循环。
+- **优先级**：🔴 高（本地发行入口不可用；此前自愈方案已被证实不足，需根治）。
+
 ## 🟡 CF-20260702-10 — 多模型任务路由：本地模型跑创作，API 模型跑分析 / 审查 / 提取
 
 - **现象 / 诉求**：用户提出“本地模型跑创作，API 跑分析”的工作方式，并进一步指出不同模型擅长的任务不同：例如 Gemini 擅长概括总结，适合状态提取 / 信息提取 / 存储检索；DeepSeek 创作可用，适合大纲和正文；Claude 更适合真实性判断、真实内容调用和后期文本审查。当前全局只配置一套主模型，用户无法按任务分配模型。

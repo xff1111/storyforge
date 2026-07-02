@@ -52,7 +52,13 @@
         try {
           if ('serviceWorker' in navigator) {
             navigator.serviceWorker.getRegistrations()
-              .then(function (rs) { rs.forEach(function (r) { r.unregister(); }); })
+              .then(function (rs) {
+                rs.forEach(function (r) { r.unregister(); });
+                if (navigator.serviceWorker.controller && !sessionStorage.getItem('storyforge-sw-clean-reloaded')) {
+                  sessionStorage.setItem('storyforge-sw-clean-reloaded', '1');
+                  location.reload();
+                }
+              })
               .catch(function () {});
           }
           if (window.caches && caches.keys) {
