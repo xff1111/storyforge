@@ -4,7 +4,7 @@
 > 📐 **施工权威**: [`docs/MASTER-BLUEPRINT.md`](MASTER-BLUEPRINT.md) — 重构 Phase 0/1/2/3 完整流程
 > 🤝 **双 Agent 协作契约**: [`docs/COLLAB-WORKFLOW.md`](COLLAB-WORKFLOW.md) — Codex 开发 / Claude 审查的分工·分支·合并纪律。**Codex 请过目并在文末 §7 确认。**
 >
-> **最后更新**: 2026-07-02（追加社区反馈待开发批次：角色弧光自动填充、英文混入、卷纲依据、本地模型配置、中文输入粘连、流派 ID 约束、多模型任务路由等；施工权威见 MASTER-BLUEPRINT）
+> **最后更新**: 2026-07-02（追加社区反馈待开发批次：角色弧光自动填充、英文混入、卷纲依据、本地模型配置、中文输入粘连、流派 ID 约束、多模型任务路由、本地模型列表刷新等；施工权威见 MASTER-BLUEPRINT）
 > **说明**: 本文档是唯一的功能规划文档。旧文档已归档至 `docs/archive/`。
 > **结构**: 上半部分「已完成」，下半部分「待开发」按优先级排列。完成后从待办挪到已完成区。
 > **重要**: 任何"加功能 / 修 bug"前，先过 CLAUDE.md 的「四问」。**头疼医头 = 永远拒绝**。
@@ -231,6 +231,7 @@
 | `codex-clipboard-8c744fc3-e073-4819-b745-74489e6d7e25.png` + `QQ20260702-110550.mp4` | v3.7.2 纯点击进入大纲后崩溃，错误为 `Cannot read properties of undefined (reading 'trim')` |
 | `codex-clipboard-9d9b765a-1ab5-41e9-8a4c-6f32af5fe2cc.png` + `codex-clipboard-fa7748f2-e323-47f1-81cb-9dfd1b8d01b7.png` | 角色驱动剧情反推的大纲与「故事设计」主线联动不足 |
 | `codex-clipboard-75e94520-4864-465b-b1a3-8a40bb299b91.png` | 多模型任务路由：本地模型跑创作，API 模型跑分析，不同功能调用不同模型 |
+| `codex-clipboard-e04d0f7a-d3ef-4bd8-8100-e6d5cf23cc84.png` | 本地模型列表刷新 / Ollama 拉取模型：用户希望看到当前 API 列表里没有显示的新本地模型 |
 
 ## ✅ CF-20260702-1 — 角色弧光自动填充被硬截断，文字多时“不全”
 
@@ -555,6 +556,40 @@
   - 是否需要项目级覆盖全局路由。Codex 建议第一版只做全局路由，项目级覆盖等用户强需求出现后再做。
   - 如果未来涉及云端真实资料检索 / 外部搜索，需另行设计权限提示和来源记录。
 - **优先级**：🟡 中（不是当前 bug，但能显著提升本地模型用户体验、成本控制和不同 AI 功能质量）。
+
+## 🟡 CF-20260702-11 — 本地模型列表刷新与 Ollama 模型拉取入口
+
+- **现象 / 诉求**：用户截图中出现“拉取本地模型”按钮和本地模型列表，追问“是当前 API 列表里没有显示的那些吗？如果新加模型就得改代码吗？”实际诉求是：用户使用 Ollama、LM Studio 或其他本地模型管理框架时，希望 StoryForge 能读取服务里已有模型，减少手填模型名；对 Ollama 还希望能拉取新模型。
+- **边界判断**：
+  - StoryForge 是纯前端创作工具，不应直接管理几十 GB 的权重文件夹，也不应内置推理引擎。
+  - 通用做法是连接本地模型服务：Ollama / LM Studio / llama.cpp server / LocalAI / vLLM / text-generation-webui 等只要暴露 OpenAI-compatible API，就走 `baseUrl + /v1/models + /v1/chat/completions`。
+  - “拉取模型”不是 OpenAI 标准能力。Ollama 有专属 pull 能力；LM Studio 通常应由用户在 LM Studio 内下载/加载模型，StoryForge 只刷新模型列表。
+- **用户故事**：
+  - 作为 LM Studio 用户，我希望启动本地 OpenAI-compatible server 后，在 StoryForge 里点击“刷新模型列表”就能看到当前已加载/可用模型，而不用手动复制模型名。
+  - 作为 Ollama 用户，我希望能在 StoryForge 里刷新已安装模型列表；如果模型还没装，可输入模型名触发 Ollama 拉取。
+  - 作为使用其他本地框架的用户，我希望只要服务兼容 OpenAI `/v1/models`，StoryForge 就能读取模型列表。
+- **推荐实施方案（给 Claude 审核）**：
+  1. 在 AI 设置页增加通用按钮“刷新模型列表”，对当前 `baseUrl` 调用 `GET ${normalizedBaseUrl}/models`，复用 `normalizeOpenAIBaseUrl()`，适用于 Ollama / LM Studio / custom OpenAI-compatible。
+  2. 返回模型列表后，展示为可点击列表；点击模型名写入 `config.model`。模型来源标记为“本地服务返回”，不需要改代码里的 `PROVIDER_MODELS`。
+  3. 对 provider 为 `ollama` 时，额外显示“Ollama 拉取模型”入口：用户输入模型名（如 `qwen2.5:14b-instruct-q4_K_M`），调用 Ollama 专属 API 或提示执行 `ollama pull xxx`。第一版若浏览器 CORS/流式进度不稳定，可只给命令复制与说明。
+  4. 对 LM Studio/custom provider 不显示“拉取模型”，只显示“请在 LM Studio / 对应框架内下载或加载模型，然后回到 StoryForge 刷新模型列表”。
+  5. 刷新失败时按错误类型提示：服务未启动、Base URL 不是 `/v1` 根路径、CORS/防火墙、接口不兼容；失败后不禁用输入框。
+  6. 列表只作为 UI 辅助，不持久化模型清单；持久化的仍是用户最终选择的 `config.model`。
+- **第一阶段建议范围**：
+  1. 只做 `/v1/models` 刷新与选择，覆盖 Ollama / LM Studio / custom。
+  2. Ollama pull 先做说明与命令复制；后续再评估是否直接调用 Ollama 原生 API。
+  3. 不做“选择权重文件夹并运行模型”，不接管 GPU/CPU 推理。
+- **验收标准**：
+  - LM Studio 启动 server 后，Base URL 为 `http://localhost:1234/v1`，点击“刷新模型列表”能显示 LM Studio 暴露的模型 ID，并可一键填入模型名。
+  - Ollama Base URL 为 `http://localhost:11434/v1`，点击“刷新模型列表”能显示已安装模型。
+  - 用户手动新增/加载模型后，不需要改 StoryForge 代码，只需刷新列表或手填模型名。
+  - 对 custom OpenAI-compatible 服务，如果 `/v1/models` 可用，则能展示模型；不可用时给出可理解错误，不影响手动输入。
+  - UI 文案区分“刷新模型列表”和“Ollama 拉取模型”，避免用户误以为 StoryForge 会直接下载/管理权重文件夹。
+- **风险 / 待决策**：
+  - Ollama 原生 pull API 是否受浏览器 CORS 限制；如限制明显，第一版只做命令复制。
+  - 是否需要支持带鉴权的 `/models`；建议沿用当前 API Key header。
+  - 是否把模型列表缓存到 localStorage；Codex 建议第一版不缓存，避免过期列表误导用户。
+- **优先级**：🟡 中（本地模型用户高频体验改进，与 CF-20260702-5 / 10 联动）。
 
 # ═══ 社区反馈批次（2026-06-30 · Windows 启动 / 细纲采纳 / 主线约束 / 主题可读性）═══
 
