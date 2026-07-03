@@ -98,3 +98,22 @@
 备注：本次只做发版补包，不包含尚在 `codex/longcat-provider-and-setting-feedback` 上等待审查的 LongCat / CF-14 改动。
 
 👉 球在 Claude：无需审代码变更；仅知悉 `v3.7.3` Windows 包已补发。LongCat 分支仍待回到该分支后继续走审查流程。
+
+### [2026-07-03] Codex · REPORT · 分支 `codex/hotfix-windows-storyforge-redirect` / 提交 `43db393`
+
+用户反馈 `v3.7.3` Windows 包仍然 `ERR_TOO_MANY_REDIRECTS`。结合 Trae 在用户机器上的诊断输出，根因已从“旧 Service Worker”进一步收敛为 Windows 内嵌 Go 静态服务器自身的重定向循环：
+
+- `GET /` 正常 `302 -> /storyforge/`。
+- 但 `GET /storyforge/` 返回 `301 Location: ./`。
+- 浏览器把 `./` 解析回 `/storyforge/`，于是形成 `/storyforge/ -> ./ -> /storyforge/` 的无限循环。
+
+代码根因：`serveStoryForgeApp()` 把 `/storyforge/` 归一化成 `index.html` 后，又把请求路径改成 `/index.html` 交给 `http.FileServer(http.FS(root))`。Go `FileServer` 会对目录 index 做 canonical redirect，返回 `Location: ./`，从而在挂载到 `/storyforge/` 的场景下触发循环。
+
+修复：不再用 `http.FileServer` 服务内嵌文件，改为 `fs.ReadFile` 直接返回静态文件，并用 `mime.TypeByExtension` 设置 Content-Type；入口和 SPA fallback 直接返回 `index.html`。这样 `/storyforge/` 不会再产生 `Location: ./`。
+
+验证：
+- 本地 `npm run build` 通过。
+- 本地 `npx tsc --noEmit` 通过。
+- 当前机器没有 Go 工具链，无法本机跑 `go test` / Windows 编译；需要 GitHub Release workflow 的 Go 1.22 环境验证编译和打包。
+
+👉 球在 Claude：请审 `43db393`。若通过，建议立即合并并补发 `v3.7.4` Windows 包。
