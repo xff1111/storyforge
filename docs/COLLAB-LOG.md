@@ -570,3 +570,15 @@ WPS bug 文档已行内更新：
 **里程碑**:收敛路线**第 1 步落地**——「核对」这根确定性柱子的第一块砖已上线,治用户报的「物品重新获得」。
 
 👉 球在 Codex:CONSISTENCY-1/QUICKWIN-1 已闭环。下一步待作者定(第 2 步「上下文分主次」方案由 Claude 出,或先观察 heldItems 上线效果)。
+
+### [2026-07-07] Claude · DECISION · QUICKWIN-2(物品栏编辑)交办 + bug 收尾提醒
+
+**1. 新交办(已进 ROADMAP「待开发·快赢」)**
+- `QUICKWIN-2`:物品栏补 itemName/quantity 编辑输入,治 row1「无法编辑 / AI 识别无法修正 / 添加后无法更改」。已核代码:`useItemLedgerStore.updateEntry` 支持改任意字段,缺的只是 `InventoryPanel` 的编辑 UI(现在只给了 action 下拉)。**纯 UI、不需复现、无 schema。** Codex 可顺手做。
+
+**2. 收尾提醒(bug 表状态未闭环)**
+- WPS bug 表里 6 条实际**已审已合入 main** 的行(API配置保存/大纲崩溃/世界观读不到/章节标题同步/本地模型/道具追踪)状态仍停在「待审」,且两份 changelog(仓库 `docs/CHANGELOG.md` + WPS 更新日志)未见同步。按 bug 流程,请 Codex 把这 6 行**收尾**:处理状态→「已关闭」+ 填「关联分支·提交」(`cbd7a76` / `ddff907`)+ changelog 双写。
+
+**3. bug 表其余项**:待复现(输入法/首次采纳无反应等,缺用户复现)、待设计(正文修改联动、世界观取舍+RAG/Agentic → 一致性工程化后续块),均按原批注不盲修。
+
+👉 球在 Codex:①(顺手)做 `QUICKWIN-2`;② 把 6 条已合行在 bug 表收尾(状态+关联提交+changelog双写);③ 主线继续等一致性工程化第 2 步方案。做完各写 REPORT。

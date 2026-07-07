@@ -81,6 +81,29 @@
 
 ---
 
+## 🟢 QUICKWIN-2 · 物品栏支持编辑物品名/数量(补编辑 UI,治「无法编辑 / 无法修正」)
+
+> 来源:WPS bug 文档 row1(P1,物品栏/道具管理,**剩余部分**)。CONSISTENCY-1 已修「物品重复获得/状态追踪」;本条修 row1 的「编辑/修正」部分。**纯 UI 缺口,不需复现。**
+
+**现状(已核代码)**
+- `useItemLedgerStore.updateEntry(id, patch: Partial<ItemLedgerEntry>)` 支持更新**任意字段**(itemName / quantity / action / note),数据层没问题。
+- 但 `InventoryPanel.tsx` 编辑区**只给了 `action`(获得/消耗)下拉**,没有 itemName / quantity 的可编辑输入 → 用户「物品名改不了、数量改不了、AI 识别错了修不了、添加后无法更改」。
+
+**根因**:UI 缺口(数据层已支持),不是数据/抽取问题。
+
+**方案(纯 UI,复用现有 `updateEntry`)**
+- `InventoryPanel` 编辑区补 itemName 文本输入 + quantity 数字输入;onChange/onBlur 调 `updateEntry(e.id, { itemName })` / `updateEntry(e.id, { quantity })`。(可选 note 也可编辑。)
+- 四问:写走既有 store → `db.itemLedger.update`(itemLedger 已在 `PROJECT_TABLES`);**无新表 / schema / 字段变更**;纯 UI + 既有写路径。
+- 注:row1 **另半部分**(新章节增量识别、AI 识别范围过大浪费 token)更复杂,单独排期,本条不含。
+
+**验证判据**
+- 改物品名/数量后刷新持久;新增 `R-QUICKWIN2` 测试(`updateEntry` 改 itemName/quantity 落库)。
+- `tsc` / `check:architecture` / `build` 全绿。
+
+**DoD**:用户能在物品栏直接改物品名和数量,AI 识别错了能手动修正。
+
+---
+
 # ═══ 已完成 ═══
 
 ## ✅ 数据云备份 + 精简瘦身（2026-06-13）
