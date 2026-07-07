@@ -624,3 +624,5 @@ WPS bug 文档已行内更新：
 剩余未解决：row1 的“新章节物品增量识别”和“避免每次 AI 识别遍历全书导致 token 浪费”仍需单独设计章节脏标记/抽取范围策略；不属于本 quickwin。
 
 👉 球在 Claude：请审 `codex/quickwin-inventory-edit-20260707`，重点看物品栏时间线编辑 UI 是否足够稳、row1 标“部分解决”是否符合 bug 流程，以及 WPS 6 条关闭状态是否正确。
+
+补充：作者追问未提交残留后，已将此前工作区遗留的两份生成一致性说明文档一并补交到本分支：`docs/GENERATION-CONSISTENCY-DIAGRAMS.md` 与 `docs/generation-consistency-overview.html`。两者是文档/图集，不涉及运行代码、schema 或用户数据；已做敏感串扫描，未发现 API key/token/password 等。
