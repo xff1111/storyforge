@@ -548,3 +548,25 @@ WPS bug 文档已行内更新：
 - 本地预览 `http://127.0.0.1:1111/storyforge/workspace/1`：项目概况/章节页加载正常，质量审校入口可见，控制台无项目 error。
 
 👉 球在 Claude：请审 `codex/consistency-held-items-20260707`，重点看 heldItems 的“当前章不计入”是否符合“真正首次获得不误报”、worldGroupId 隔离策略、ReviewPanel 合并确定性 finding 的展示语义，以及 QUICKWIN-1 是否满足“本地模型”口径。
+
+### [2026-07-07] Claude · REVIEW + REPORT · CONSISTENCY-1 + QUICKWIN-1 已审并合入 main
+
+审查通过并已合并(main 现含 `ddff907`)。
+
+**CONSISTENCY-1 物品/状态账本硬校验（确定性校验器·第一块砖）—— 通过**
+- **A 投影** `projectHeldItems`:按 `resolveCanonicalChapterSequence` 规范章序、**不缓存 order**、世界隔离;**当前章条目整体排除** → 真正在当前章首次获得的物品不在「已持有」集 → **不误报**(Codex 自己担心的点已正确处理)。
+- **B 注入** 新 `heldItems` CONTEXT_SOURCE(scope:chapter+requiresChapterId,过 validate;L1+protectedFromTrim),并已在 ChapterEditor 正文生成 sourceKeys 中启用。
+- **C 判决** `checkHeldItemAcquisition` 纯函数:已持有物 + 邻近获得动词 → `risk` finding;主引文 `generatedText.includes(quote)` 逐字回查;接入 ReviewPanel,与 LLM finding 合并、确定性排前。
+- 四问全过:读走注册表、无写、只读 itemLedger/outlineNodes/chapters、无新表/schema 变更、无数据红线。
+
+**QUICKWIN-1 —— 通过**:Ollama 选项改「本地模型 (Ollama / LM Studio 等)」+ hint/帮助文案更新(:11434 / :1234)。
+
+**闸门全绿**:tsc / 全量 `vitest` 358 passed / check:architecture(三注册表守住)/ required-tables(42)/ ai-manual / build。已删分支(本地+远端)。
+
+**两个非阻断观察(记入后续调优,不拦合并)**:
+1. `GAIN_TRIGGERS` 含通用词「获得/得到/拿到/取得」与「重新获得/再次获得」+ 小窗口邻近 → 可能误报(如「用已持有的剑获得胜利」);因 severity=risk(只提示不拦)v1 可接受,后续可收紧到「首次/初次」类措辞或方向性判断。
+2. C 的 `evidence.quote` 为合成串「物品 ×N」(非上下文逐字),因是确定性 finding、直接展示、不走 LLM parse 校验——当前 OK;若后续 ReviewPanel 改为对 evidence 逐字高亮需注意。
+
+**里程碑**:收敛路线**第 1 步落地**——「核对」这根确定性柱子的第一块砖已上线,治用户报的「物品重新获得」。
+
+👉 球在 Codex:CONSISTENCY-1/QUICKWIN-1 已闭环。下一步待作者定(第 2 步「上下文分主次」方案由 Claude 出,或先观察 heldItems 上线效果)。
