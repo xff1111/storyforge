@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import { db } from '../lib/db/schema'
 import type { OutlineNode } from '../lib/types'
+import { normalizeOutlineNode } from '../lib/outline/normalize'
 import { useChapterStore } from './chapter'
 
 interface OutlineStore {
@@ -25,16 +26,6 @@ interface OutlineStore {
 
 const now = () => Date.now()
 
-function normalizeOutlineNode(node: OutlineNode): OutlineNode {
-  return {
-    ...node,
-    parentId: node.parentId ?? null,
-    title: String(node.title ?? ''),
-    summary: String(node.summary ?? ''),
-    order: Number.isFinite(Number(node.order)) ? Number(node.order) : 0,
-  }
-}
-
 export const useOutlineStore = create<OutlineStore>((set, get) => ({
   nodes: [],
   loading: false,
@@ -55,10 +46,33 @@ export const useOutlineStore = create<OutlineStore>((set, get) => ({
   },
 
   updateNode: async (id, data) => {
-    await db.outlineNodes.update(id, { ...data, updatedAt: now() })
+    const ts = now()
+    const before = get().nodes.find(n => n.id === id) ?? await db.outlineNodes.get(id)
+    await db.outlineNodes.update(id, { ...data, updatedAt: ts })
+    if (
+      before?.type === 'chapter'
+      && Object.prototype.hasOwnProperty.call(data, 'title')
+      && typeof data.title === 'string'
+    ) {
+      const chapterIds = (await db.chapters.where('outlineNodeId').equals(id).primaryKeys()) as number[]
+      if (chapterIds.length) {
+        await db.chapters.bulkUpdate(chapterIds.map(chapterId => ({
+          key: chapterId,
+          changes: { title: data.title, updatedAt: ts },
+        })))
+        useChapterStore.setState(state => ({
+          chapters: state.chapters.map(chapter =>
+            chapter.outlineNodeId === id ? { ...chapter, title: data.title!, updatedAt: ts } : chapter,
+          ),
+          currentChapter: state.currentChapter?.outlineNodeId === id
+            ? { ...state.currentChapter, title: data.title!, updatedAt: ts }
+            : state.currentChapter,
+        }))
+      }
+    }
     set({
       nodes: get().nodes.map(n =>
-        n.id === id ? normalizeOutlineNode({ ...n, ...data, updatedAt: now() }) : n
+        n.id === id ? normalizeOutlineNode({ ...n, ...data, updatedAt: ts }) : n
       ),
     })
   },

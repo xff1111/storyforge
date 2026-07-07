@@ -145,9 +145,9 @@ AI 输出经 `adopt({ target, data })` 写回,只有这里登记的字段可写(
 | `inspiration.reverse` | `src/components/project/InspirationPanel.tsx:107` |
 | `inventory.extract` | `src/components/items/InventoryPanel.tsx:84` |
 | `location.extract` | `src/components/location/LocationPanel.tsx:104` |
-| `outline.chapter` | `src/components/outline/OutlinePanel.tsx:376`<br/>`src/lib/ai/batch-outline-runner.ts:123` |
+| `outline.chapter` | `src/components/outline/OutlinePanel.tsx:378`<br/>`src/lib/ai/batch-outline-runner.ts:123` |
 | `outline.character-driven` | `src/components/outline/CharacterDrivenPlotPanel.tsx:113` |
-| `outline.volume` | `src/components/outline/OutlinePanel.tsx:328` |
+| `outline.volume` | `src/components/outline/OutlinePanel.tsx:330` |
 | `prompt.examples` | `src/components/settings/prompt/PromptExamplesEditor.tsx:105` |
 | `reference.characters` | `src/components/project/AnalysisReportViewer.tsx:138` |
 | `reference.summary` | `src/components/project/AnalysisReportViewer.tsx:109` |
@@ -176,4 +176,4 @@ AI 输出经 `adopt({ target, data })` 写回,只有这里登记的字段可写(
 
 ---
 
-生成时间基准:commit `69c1fb2`
+生成时间基准:commit `bb85de8`

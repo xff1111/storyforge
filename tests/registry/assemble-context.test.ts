@@ -78,6 +78,42 @@ describe('Phase 1.3a · 统一上下文装配层', () => {
     expect(assembled.text).not.toContain('澜青')
   })
 
+  it('worldGroupId 为 null 时世界观/力量体系可回退到项目首条，非 null 仍严格隔离', async () => {
+    const now = Date.now()
+    const projectId = await createProject()
+    const primaryWorld = await db.worldGroups.add({
+      projectId, name: '主世界', type: 'primary', order: 0, createdAt: now, updatedAt: now,
+    } as any) as number
+    const otherWorld = await db.worldGroups.add({
+      projectId, name: '副世界', type: 'parallel', order: 1, createdAt: now, updatedAt: now,
+    } as any) as number
+    await db.worldviews.add({
+      projectId, worldGroupId: primaryWorld, worldOrigin: '星门坠落后灵气复苏', createdAt: now, updatedAt: now,
+    } as any)
+    await db.powerSystems.add({
+      projectId, worldGroupId: primaryWorld, name: '星门修炼法', description: '观星入境', levels: '[]', rules: '不可越阶吸收星核', createdAt: now, updatedAt: now,
+    } as any)
+
+    const defaultCtx = await assembleContext({
+      projectId,
+      worldGroupId: null,
+      sourceKeys: ['worldview', 'powerSystem'],
+    })
+
+    expect(defaultCtx.included).toEqual(['worldview', 'powerSystem'])
+    expect(defaultCtx.text).toContain('星门坠落后灵气复苏')
+    expect(defaultCtx.text).toContain('星门修炼法')
+
+    const isolatedCtx = await assembleContext({
+      projectId,
+      worldGroupId: otherWorld,
+      sourceKeys: ['worldview', 'powerSystem'],
+    })
+
+    expect(isolatedCtx.text).not.toContain('星门坠落后灵气复苏')
+    expect(isolatedCtx.text).not.toContain('星门修炼法')
+  })
+
   it('worldRules 按 worldGroupId 隔离 profile 与历史辅助数据', async () => {
     const now = Date.now()
     const projectId = await createProject()

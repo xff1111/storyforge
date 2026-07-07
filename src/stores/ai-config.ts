@@ -164,6 +164,8 @@ interface AIConfigStore {
   presets: AIConfigPreset[]
   /** 当前生效的预设 id（null = 未对应任何预设/已改动） */
   activePresetId: string | null
+  /** 最近一次应用/保存的预设 id；表单改动后仍保留,用于显式覆盖当前预设。 */
+  editingPresetId: string | null
   /** NS-5 语义检索（embedding）配置 */
   embedding: EmbeddingConfig
   setEmbeddingConfig: (partial: Partial<EmbeddingConfig>) => void
@@ -186,6 +188,7 @@ export const useAIConfigStore = create<AIConfigStore>((set, get) => ({
   rememberApiKey: initial.rememberApiKey,
   presets: loadPresets(),
   activePresetId: null,
+  editingPresetId: null,
   embedding: loadEmbeddingConfig(initial.rememberApiKey),
 
   setEmbeddingConfig: (partial: Partial<EmbeddingConfig>) => {
@@ -216,7 +219,7 @@ export const useAIConfigStore = create<AIConfigStore>((set, get) => ({
     }
     const presets = [...get().presets, preset]
     savePresets(presets)
-    set({ presets, activePresetId: id })
+    set({ presets, activePresetId: id, editingPresetId: id })
     return id
   },
 
@@ -225,7 +228,7 @@ export const useAIConfigStore = create<AIConfigStore>((set, get) => ({
     if (!preset) return
     const newConfig = { ...preset.config, apiKey: preset.config.apiKey || get().config.apiKey }
     persistConfig(newConfig, get().rememberApiKey)
-    set({ config: newConfig, activePresetId: id })
+    set({ config: newConfig, activePresetId: id, editingPresetId: id })
   },
 
   updatePresetFromCurrent: (id: string) => {
@@ -234,7 +237,7 @@ export const useAIConfigStore = create<AIConfigStore>((set, get) => ({
       config: presetConfig(get().config, get().rememberApiKey),
     } : p)
     savePresets(presets)
-    set({ presets, activePresetId: id })
+    set({ presets, activePresetId: id, editingPresetId: id })
   },
 
   renamePreset: (id: string, name: string) => {
@@ -246,7 +249,11 @@ export const useAIConfigStore = create<AIConfigStore>((set, get) => ({
   deletePreset: (id: string) => {
     const presets = get().presets.filter(p => p.id !== id)
     savePresets(presets)
-    set({ presets, activePresetId: get().activePresetId === id ? null : get().activePresetId })
+    set({
+      presets,
+      activePresetId: get().activePresetId === id ? null : get().activePresetId,
+      editingPresetId: get().editingPresetId === id ? null : get().editingPresetId,
+    })
   },
 
   switchProvider: (provider: AIProvider) => {
@@ -258,7 +265,7 @@ export const useAIConfigStore = create<AIConfigStore>((set, get) => ({
       apiKey: provider === get().config.provider ? get().config.apiKey : (preset.apiKey || ''),
     }
     persistConfig(newConfig, get().rememberApiKey)
-    set({ config: newConfig, activePresetId: null })
+    set({ config: newConfig, activePresetId: null, editingPresetId: null })
   },
 
   testConnection: async (): Promise<TestResult> => {

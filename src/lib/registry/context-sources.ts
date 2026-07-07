@@ -30,29 +30,25 @@ import type { Character, PowerSystem, Worldview } from '../types'
 import type { ContextSource } from './types'
 import { htmlToPlainText } from '../utils/html'
 
-function hasExplicitWorldGroupId(input: { worldGroupId?: number | null }): boolean {
-  return Object.prototype.hasOwnProperty.call(input, 'worldGroupId')
-}
-
 async function readWorldview(projectId: number, worldGroupId?: number | null): Promise<Worldview | null> {
   const rows = await db.worldviews.where('projectId').equals(projectId).toArray()
-  if (hasExplicitWorldGroupId({ worldGroupId })) {
-    return rows.find(w => (w.worldGroupId ?? null) === (worldGroupId ?? null)) ?? null
+  if (worldGroupId != null) {
+    return rows.find(w => w.worldGroupId === worldGroupId) ?? null
   }
   return rows.find(w => (w.worldGroupId ?? null) === null) ?? rows[0] ?? null
 }
 
 async function readPowerSystem(projectId: number, worldGroupId?: number | null): Promise<PowerSystem | null> {
   const rows = await db.powerSystems.where('projectId').equals(projectId).toArray()
-  if (hasExplicitWorldGroupId({ worldGroupId })) {
-    return rows.find(p => (p.worldGroupId ?? null) === (worldGroupId ?? null)) ?? null
+  if (worldGroupId != null) {
+    return rows.find(p => p.worldGroupId === worldGroupId) ?? null
   }
   return rows.find(p => (p.worldGroupId ?? null) === null) ?? rows[0] ?? null
 }
 
 async function readCharacters(projectId: number, worldGroupId?: number | null): Promise<Character[]> {
   const rows = await db.characters.where('projectId').equals(projectId).toArray()
-  if (!hasExplicitWorldGroupId({ worldGroupId })) return rows
+  if (worldGroupId === undefined) return rows
   const wg = worldGroupId ?? null
   return rows.filter(c => c.isCrossWorld || (c.homeWorldGroupId ?? null) === wg)
 }

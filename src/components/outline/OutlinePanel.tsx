@@ -19,6 +19,7 @@ import { useAIConfigStore } from '../../stores/ai-config'
 import { runBatchOutlineGeneration, type BatchOutlineProgress } from '../../lib/ai/batch-outline-runner'
 import { adopt } from '../../lib/registry/adopt'
 import { getTopLevelVolumes, estimateChaptersPerVolume, DEFAULT_WORDS_PER_CHAPTER } from '../../lib/outline/selectors'
+import { normalizeOutlineNode } from '../../lib/outline/normalize'
 import type { AssembleContextResult } from '../../lib/registry/types'
 import AIStreamOutput from '../shared/AIStreamOutput'
 import PromptRunPanel from '../shared/PromptRunPanel'
@@ -115,7 +116,8 @@ export default function OutlinePanel({ project, onOpenChapter }: Props) {
 
   useEffect(() => { loadAll(project.id!) }, [project.id, loadAll])
 
-  const volumes = getTopLevelVolumes(nodes)
+  const normalizedNodes = useMemo(() => nodes.map(normalizeOutlineNode), [nodes])
+  const volumes = getTopLevelVolumes(normalizedNodes)
   const selectedVol = volumes.find(v => v.id === selectedVolId) || null
 
   // 修复「长卷被压成 ~20 章」：选中卷 / 改「每章字数」时，按「卷字数 ÷ 每章字数」自动估算
@@ -141,14 +143,14 @@ export default function OutlinePanel({ project, onOpenChapter }: Props) {
   // 故事块和章节层级
   const selectedVolBlocks = useMemo(() => {
     if (!selectedVol) return []
-    return nodes.filter(n => n.parentId === selectedVol.id && n.type === 'storyBlock').sort((a, b) => a.order - b.order)
-  }, [nodes, selectedVol])
+    return normalizedNodes.filter(n => n.parentId === selectedVol.id && n.type === 'storyBlock').sort((a, b) => a.order - b.order)
+  }, [normalizedNodes, selectedVol])
 
   // 直接挂在卷下的章节（无故事块归属）
   const selectedVolChapters = useMemo(() => {
     if (!selectedVol) return []
-    return nodes.filter(n => n.parentId === selectedVol.id && n.type === 'chapter').sort((a, b) => a.order - b.order)
-  }, [nodes, selectedVol])
+    return normalizedNodes.filter(n => n.parentId === selectedVol.id && n.type === 'chapter').sort((a, b) => a.order - b.order)
+  }, [normalizedNodes, selectedVol])
 
   // 是否使用故事块模式
   const hasBlocks = selectedVolBlocks.length > 0
@@ -919,7 +921,7 @@ export default function OutlinePanel({ project, onOpenChapter }: Props) {
               <div className="flex items-center justify-between mb-2">
                 <h3 className="text-sm font-medium text-text-primary">
                   {hasBlocks ? '故事结构' : '章节列表'}
-                  <span className="text-text-muted font-normal ml-1">（{selectedVolChapters.length + nodes.filter(n => selectedVolBlocks.some(b => b.id === n.parentId) && n.type === 'chapter').length} 章）</span>
+                  <span className="text-text-muted font-normal ml-1">（{selectedVolChapters.length + normalizedNodes.filter(n => selectedVolBlocks.some(b => b.id === n.parentId) && n.type === 'chapter').length} 章）</span>
                 </h3>
                 {!hasBlocks && (
                   <StructureMenu onSelect={handleAddStructure} />
@@ -930,7 +932,7 @@ export default function OutlinePanel({ project, onOpenChapter }: Props) {
               {hasBlocks && (
                 <div className="space-y-3 mb-3">
                   {selectedVolBlocks.map(block => {
-                    const blockChapters = nodes.filter(n => n.parentId === block.id && n.type === 'chapter').sort((a, b) => a.order - b.order)
+                    const blockChapters = normalizedNodes.filter(n => n.parentId === block.id && n.type === 'chapter').sort((a, b) => a.order - b.order)
                     return (
                       <StoryBlockSection
                         key={block.id}

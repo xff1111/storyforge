@@ -32,7 +32,7 @@ const PROVIDER_OPTIONS: { value: AIProvider; label: string; cors: boolean; hint:
 export default function AIConfigPanel() {
   const { config, setConfig, switchProvider, testConnection,
     rememberApiKey, setRememberApiKey,
-    presets, activePresetId, saveAsPreset, applyPreset, updatePresetFromCurrent, renamePreset, deletePreset } = useAIConfigStore()
+    presets, activePresetId, editingPresetId, saveAsPreset, applyPreset, updatePresetFromCurrent, renamePreset, deletePreset } = useAIConfigStore()
   const dialog = useDialog()
   const [showKey, setShowKey] = useState(false)
   const [testing, setTesting] = useState(false)
@@ -55,6 +55,7 @@ export default function AIConfigPanel() {
   const logs = useSyncExternalStore(subscribeLogs, getLogs)
 
   const currentProviderInfo = PROVIDER_OPTIONS.find((p) => p.value === config.provider)
+  const editingPreset = editingPresetId ? presets.find(p => p.id === editingPresetId) : null
 
   const handleTest = async () => {
     setTesting(true)
@@ -111,7 +112,23 @@ export default function AIConfigPanel() {
         <div className="mb-4 pb-4 border-b border-border/50">
           <div className="flex items-center justify-between mb-2">
             <label className="text-sm text-text-secondary">配置预设</label>
-            {savingPreset ? (
+            {editingPreset && !savingPreset ? (
+              <div className="flex items-center gap-1.5">
+                <button
+                  onClick={() => updatePresetFromCurrent(editingPreset.id)}
+                  title={`用当前表单内容覆盖「${editingPreset.name}」`}
+                  className="text-xs px-2.5 py-1 rounded-lg bg-accent text-white hover:bg-accent-hover transition-colors"
+                >
+                  保存修改到「{editingPreset.name}」
+                </button>
+                <button
+                  onClick={() => setSavingPreset(true)}
+                  className="text-xs px-2.5 py-1 rounded-lg bg-bg-elevated text-text-secondary border border-border hover:text-accent hover:border-accent/50 transition-colors"
+                >
+                  另存为新预设
+                </button>
+              </div>
+            ) : savingPreset ? (
               <div className="flex items-center gap-1.5">
                 <input
                   autoFocus
@@ -155,7 +172,7 @@ export default function AIConfigPanel() {
                       onClick={() => updatePresetFromCurrent(p.id)}
                       title="用当前配置覆盖此预设"
                       className="opacity-70 hover:opacity-100"
-                    >💾</button>
+                    >保存</button>
                   )}
                   <button
                     onClick={() => { void handleRenamePreset(p.id, p.name) }}
