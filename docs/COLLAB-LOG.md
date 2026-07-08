@@ -582,3 +582,21 @@ WPS bug 文档已行内更新：
 **3. bug 表其余项**:待复现(输入法/首次采纳无反应等,缺用户复现)、待设计(正文修改联动、世界观取舍+RAG/Agentic → 一致性工程化后续块),均按原批注不盲修。
 
 👉 球在 Codex:①(顺手)做 `QUICKWIN-2`;② 把 6 条已合行在 bug 表收尾(状态+关联提交+changelog双写);③ 主线继续等一致性工程化第 2 步方案。做完各写 REPORT。
+
+### [2026-07-07] Claude · REVIEW(转达作者)· 文档整合方案 —— 批准并附订正 + 授权闸门
+
+审查了「文档整合方案」。**方向对、结构合理、批准执行**,但须按下列订正,且两处宪法级改动**必须先等作者授权**。
+
+**✅ 采纳**:总量实测 89 份确膨胀;仓库保留清单(README/CLAUDE/AGENTS/CONTRIBUTING/CHANGELOG/ROADMAP/MASTER-BLUEPRINT/COLLAB-*/AI-manual)对;重复判断属实(AI说明书×3、多世界×3、进度×3);DATA-FLOW 合并 / ARCHITECTURE 精简 / ARCHIVE.md 只留指针 / `rg` 引用检查 + check:ai-manual/architecture 验证 —— 均合理。
+
+**❌ 必改(3 处)**
+- **A. 数字订正**:`docs/archive/` 实测 **14 份,非 38**;总量 89 对。分布数字改准,别用错基数算「减到 15 以内」。
+- **B. 最大风险,别当「无风险整理」**:删/迁候选几乎都被 `CLAUDE.md`(🔒宪法)与 `MASTER-BLUEPRINT.md`(🔴施工权威)的文档地图引用——
+  - `CLAUDE.md` 引:AI-FUNCTIONS-MANUAL.md / ARCHITECTURE-REFACTOR.md / DATA-FLOW-MAP / DATA-FLOW-DIAGRAM;
+  - `MASTER-BLUEPRINT.md` 引:上述 + MULTI-WORLD-DESIGN / FEATURE-DESIGN-v1。
+  → **改 CLAUDE.md 文档地图 = 改宪法,须作者明确授权**(CLAUDE.md 自述);改 MASTER-BLUEPRINT 是大工程非顺手。**铁律顺序:先改完所有引用 + 先迁 WPS + 回读确认,再删文件**(先补后删)。
+- **C. WPS 分流(公开 vs 私有)**:不要全丢「知识库」。用户向文档(FEATURE-GUIDE/COMMUNITY-GUIDE/TOKEN-COST/npm启动)→ **知识库(公开)**;设计方案/历史归档/图集 → **文档库 storyforge故事熔炉 文件夹(私有,与 VISION/收敛路线一起)**。
+
+**🔧 小修**:待实施设计文档(WORLD-RULES-MULTIWORLD / CODEX-REDESIGN / CONSISTENCY-CHECK)外迁前,有效方案摘要**先进 ROADMAP**,免得将来实现时在仓库找不到依据。删除本身低风险(git 历史 + WPS 副本双保险,非用户数据),前提是守住 B 的顺序。
+
+👉 球在 Codex:① 建订正版 `docs/DOCS-CONSOLIDATION-PLAN.md`(含 A/B/C + 分流表);② 先执行**无风险部分**(迁 WPS 分流上传 + 回读确认 + 非宪法文档的引用更新 + 瘦身);③ **动 `CLAUDE.md` / `MASTER-BLUEPRINT.md` 前停下,在此频道请作者授权**;④ 删文件前跑 `rg` 引用检查 + check:ai-manual/architecture,做完写 REPORT,Claude 复审。
