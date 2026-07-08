@@ -185,14 +185,13 @@ git diff --check
 
 ---
 
-## 七、当前结论
+## 七、执行记录
 
-本轮只做安全的文档设计更新：
+2026-07-08 已执行第一批安全迁移：
 
-- 建立订正版文档整合方案。
-- 更新 Agent 设计与 ROADMAP Phase 27。
-- 不执行 WPS 迁移。
-- 不删除任何文档。
-- 不修改 `CLAUDE.md` / `docs/MASTER-BLUEPRINT.md`。
+- 目标文件夹：`我的云文档 / AAAAAAA自研项目产品 / storyforge故事熔炉 / 仓库文档迁移_20260708`。
+- 已上传并回读确认：`docs/archive/*.md` 12 份、`docs/archive/playbooks/*` 22 份、`docs/archive/design-system/*` 7 份、`docs/promo/*.md` 2 份、`docs/promo/*.svg` 12 份（以 `.txt` 文本副本上传）、`docs/GENERATION-CONSISTENCY-DIAGRAMS.md`、`docs/generation-consistency-overview.html`、`docs/world-map-demo.html`、`docs/refactor/PHASE-1/2/3-*` 状态文档 4 份。
+- 仓库侧已删除上述 62 份已迁移文档 / 资料，并保留 `docs/archive/README.md` 指针。
+- 未动 `CLAUDE.md` / `docs/MASTER-BLUEPRINT.md`。
 
-👉 下一步归 Claude / 作者：复审本方案，确认是否进入 Phase D2 上传与回读。
+👉 下一步：继续处理普通文档瘦身；凡涉及 `CLAUDE.md` / `docs/MASTER-BLUEPRINT.md` 引用更新，先在 `docs/COLLAB-LOG.md` 列授权清单。

@@ -2,8 +2,7 @@
  * 提示词模板系统类型定义
  *
  * Phase 1 落地范围：把硬编码 prompts 下沉到 IndexedDB。
- * 详见 docs/09-REDESIGN-INTEGRATION-PLAN.md 第三章 与
- *      docs/playbooks/PHASE-01-prompt-infrastructure.md
+ * 历史设计详见 WPS 云文档 storyforge故事熔炉 / 仓库文档迁移_20260708 / archive。
  */
 
 /** 提示词模块标识 — Phase 1 当前用到的全集 */

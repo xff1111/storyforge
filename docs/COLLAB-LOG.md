@@ -688,3 +688,45 @@ WPS bug 文档已行内更新：
 - `git diff --check` 通过。
 
 👉 球在 Claude：请审 `codex/docs-agent-design-20260708`，重点看文档整合方案的授权闸门是否足够严，以及 Phase 27 的多 agent / 确定性检测 / 前后台安全线是否完整承接作者意图。
+
+### [2026-07-08] Codex · REPORT · 文档迁移执行第一批 / 分支 `codex/docs-agent-design-20260708`
+
+按作者最新指令执行：**不再往 WPS 知识库添加任何内容**，所有仓库迁移文档统一放到截图指定文件夹：
+
+`我的云文档 / AAAAAAA自研项目产品 / storyforge故事熔炉 / 仓库文档迁移_20260708`
+
+已完成并回读确认：
+- `archive/`：旧 01-09、DEV_PLAN、HANDOFF 共 12 份。
+- `archive/playbooks/`：PHASE-00~20 + TEMPLATE 共 22 份。
+- `archive/design-system/`：设计系统历史资料 7 份，其中 css/ts 以 `.txt` 文本副本上传。
+- `promo/`：知乎稿 2 份。
+- `promo/assets-as-text/`：SVG 宣传素材 12 份，以 `.txt` 文本副本上传。
+- `visual-demos/`：`GENERATION-CONSISTENCY-DIAGRAMS.md`、`generation-consistency-overview.html`、`world-map-demo.html` 共 3 份。
+- `refactor/`：无外部引用的 PHASE-1/2/3 状态文档 4 份。
+
+仓库侧处理：
+- 删除上述已迁移并回读确认的 62 份历史/宣传/图集/状态文档与素材。
+- `docs/archive/` 仅保留 `README.md` 指针。
+- 更新 `docs/ROADMAP.md` 归档说明与历史来源口径。
+- 更新 `docs/DOCS-CONSOLIDATION-PLAN.md` 执行记录。
+- 修正 `src/lib/types/prompt.ts` 中已失效的旧文档路径注释，改为指向 WPS 迁移目录说明。
+
+未做 / 安全边界：
+- 未修改 `CLAUDE.md`。
+- 未修改 `docs/MASTER-BLUEPRINT.md`。
+- 未删除仍被宪法、蓝图、代码或脚本引用的当前施工文档。
+- 未操作 `storyforge知识库`。
+- 无 schema / DB / 用户数据改动。
+
+验证：
+- WPS 三批目录均已 `list-files` 回读确认数量与文件名。
+- 删除文件名引用扫描：除 `docs/COLLAB-LOG.md` 历史发言与 `docs/DOCS-CONSOLIDATION-PLAN.md` 执行记录外，无活断链。
+- `git diff --check` 通过。
+- `npm run check:architecture` 通过。
+- `npm run check:ai-manual` 通过。
+- `npx tsc --noEmit` 通过。
+
+剩余需授权/后续：
+- `CLAUDE.md` / `MASTER-BLUEPRINT.md` 引用的文档（如 `DATA-FLOW-*`、`AI-FUNCTIONS-MANUAL*`、`CODEX-REDESIGN`、`CONSISTENCY-CHECK-DESIGN`、`WORLD-RULES-MULTIWORLD-DESIGN` 等）本轮未瘦身；若要继续删或改引用，需要作者明确授权。
+
+👉 球在 Claude：请审本分支的文档迁移删除范围，重点看是否存在不该删除的仓库资料、WPS 回读记录是否足够、以及未触碰宪法/蓝图的边界是否符合要求。
