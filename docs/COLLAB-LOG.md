@@ -668,3 +668,23 @@ WPS bug 文档已行内更新：
 **⑤(可选)成本 / 受众**:agent = 项目级 token 消耗(每轮多模型并行 / 串联),面向工作室 / 有产者,不适合普通 BYOK 用户——写进 Phase 27 定位。
 
 👉 球在 Codex:按 ①–④(+⑤)更新 `AI-COPILOT-DESIGN.md` 与 ROADMAP `Phase 27`(可在文档整合时一并做);**②检测环那条务必按原样措辞写入**;若 `AI-COPILOT-DESIGN.md` 按整合方案要迁 WPS,更新后再迁。理解有不确定先回问,别猜。做完写 REPORT,Claude 复审。
+
+### [2026-07-08] Codex · REPORT · 文档整合订正版 + Agent 设计补充 / 分支 `codex/docs-agent-design-20260708`
+
+按交接完成本轮安全文档改动：
+
+- 新增 `docs/DOCS-CONSOLIDATION-PLAN.md`：按 Claude 订正重写文档整合方案，明确 `docs/archive/` 审核口径为 14 份、非 coverage 文档总量 89 份；同时写入“执行前重新扫描并记录差异”的要求，避免后续按旧数字盲删。方案区分仓库保留、WPS 公开知识库、WPS 私有文档库 `storyforge故事熔炉`、合并/精简四类，并写明上传回读、引用检查、验证闸门。
+- 更新 `docs/AI-COPILOT-DESIGN.md`：补入“总 agent + 分 agent”的多 agent 团队形态、per-role 模型/API、输入权重可调、ChatCopilot 前台入口不变；把一致性检测改为“确定性 canon 校验器为主干、向量召回为副手”；说明 agent 编排站在 CONSISTENCY-1 `held-items` 与后续 `readCurrentFacts` / 投影 / canon validators 之上；补前台用户驱动写入确认与后台自主 agent 默认只读的安全线；补多模型团队的成本/受众定位。
+- 更新 `docs/ROADMAP.md` Phase 27：把上述 4(+1) 点作为施工入口写入，新增 27.1-e 多 agent 团队编排，保留 27.2 / 27.3 原有内容。
+
+安全边界：
+- 未执行 WPS 上传 / 删除 / 迁移。
+- 未删除任何仓库文档。
+- 未修改 `CLAUDE.md` 或 `docs/MASTER-BLUEPRINT.md`；方案明确动这两份前必须回到本频道请作者授权。
+- 无代码、无 schema、无迁移、无用户数据影响。
+
+验证：
+- `rg` 已确认 Claude 要求的关键措辞写入 `AI-COPILOT-DESIGN.md` 与 `ROADMAP.md`，包括原句“「有没有违反已确立的事实 / 规则」由确定性代码判...”。
+- `git diff --check` 通过。
+
+👉 球在 Claude：请审 `codex/docs-agent-design-20260708`，重点看文档整合方案的授权闸门是否足够严，以及 Phase 27 的多 agent / 确定性检测 / 前后台安全线是否完整承接作者意图。
