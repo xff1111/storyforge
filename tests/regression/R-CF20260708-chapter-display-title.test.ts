@@ -25,7 +25,7 @@ describe('R-CF20260708-chapter-display-title: 正文页标题从大纲派生', (
     const secondNode = outline(3, 1, 1, '第二章 发射与抵达')
     const secondChapter = chapter(11, 3, 5, '第四十一章 发射与抵达')
 
-    expect(resolveChapterDisplayMeta(secondChapter, [volume, firstNode, secondNode], [secondChapter]))
+    expect(resolveChapterDisplayMeta(secondChapter, [volume, firstNode, secondNode]))
       .toEqual({
         title: '第二章 发射与抵达',
         ordinal: 2,
@@ -45,7 +45,7 @@ describe('R-CF20260708-chapter-display-title: 正文页标题从大纲派生', (
     }
     const targetChapter = chapter(121, 40, 120, '第四十一章 发射与抵达')
 
-    expect(resolveChapterDisplayMeta(targetChapter, outlineNodes, [targetChapter]))
+    expect(resolveChapterDisplayMeta(targetChapter, outlineNodes))
       .toEqual({
         title: '第三十九章 发射与抵达',
         ordinal: 39,
@@ -61,7 +61,6 @@ describe('R-CF20260708-chapter-display-title: 正文页标题从大纲派生', (
     expect(resolveChapterDisplayMeta(
       originalSixthChapter,
       [volume, firstNode, originalSixthNode],
-      [originalSixthChapter],
     )).toEqual({
       title: '第六章 删除后应变第二章',
       ordinal: 2,

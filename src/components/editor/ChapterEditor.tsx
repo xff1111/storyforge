@@ -186,8 +186,8 @@ export default function ChapterEditor({ project, outlineNodeId }: Props) {
 
   const outlineNode = currentChapter ? nodes.find(n => n.id === currentChapter.outlineNodeId) : null
   const chapterDisplay = useMemo(() => {
-    return currentChapter ? resolveChapterDisplayMeta(currentChapter, nodes, chapters) : null
-  }, [currentChapter, nodes, chapters])
+    return currentChapter ? resolveChapterDisplayMeta(currentChapter, nodes) : null
+  }, [currentChapter, nodes])
   // 多世界：沿父链找到所属卷的 worldGroupId
   const chapterWorldGroupId = useMemo(() => {
     if (!project.enableMultiWorld || !outlineNode) return null
