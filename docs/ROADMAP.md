@@ -58,6 +58,32 @@
 
 ---
 
+## 🔴 CONSISTENCY-2 · 认知/知识账本(开天眼确定性检测 · 收敛路线第4步第一块)
+
+> 软硬结合收敛路线见 `docs/CONSISTENCY-ENGINEERING-ROUTE.md`。本条 = held-items(CONSISTENCY-1)之后的下一块确定性砖,**同时喂 canon 校验器(开天眼硬检测)和 PIPELINE-2 章纲工坊的认知边界节点/gate**——改一处,一致性 + agent 双受益。
+
+**用户故事**:作为作者,我想在角色"表现出知道他还没获知的信息"时被**当场标出**(开天眼 / 认知 OOC),而不是等我肉眼发现或指望 LLM 审校碰运气。
+
+**现状(已核代码)**:`temporalFacts` 记世界事实真/假,但**没有"每角色知道什么"这一维**;"开天眼"检测目前只能靠 LLM 审校(软、会漏)。`held-items` 已验证"事件流水 → 投影 → 确定性硬校验"模式可行。
+
+**方案(和 held-items 完全同模式)**
+- **知识获取事件流水**:`{ characterId, 获知内容(关联 fact / codexEntry), 来源(亲眼/告知/推理), sourceChapterId }`。优先复用 `temporalFacts` 的 `characterId` 维度扩展;不够则新表 `knowledgeLedger`(进 `PROJECT_TABLES`)。
+- **投影**:`readCharacterKnowledge(characterId, chapterN)` → 该角色第 N 章 **知道{} / 不知道{} / 误以为{}**。
+- **硬校验**:`checkCognitionBoundary` —— 正文/章纲里角色引用了"只有知道 X 才能引用"的信息,但投影显示他不知道 → 标"开天眼";引文逐字回查。
+- **"误以为"维度**:记录角色错误认知(剧情引擎 + 校验用);现有真/假事实缺这一维。
+
+**四问 checklist**
+- ① 读:走 `assembleContext`(新增 `characterKnowledge` 源)。
+- ② 写:知识事件经 `adopt()` + `FIELD_REGISTRY` / `ADOPTION_SCHEMAS`,不裸写。
+- ③ 表:若新增 `knowledgeLedger` → 先进 `PROJECT_TABLES`(owner / worldScoped / refs / exportable),生命周期自动覆盖。
+- ④ 未登记先停,补注册表再写功能。
+
+**数据红线**:新表 = 迁移测试 + 导出/导入往返;生产不自动清库;角色删除按 `PROJECT_TABLES` refs 处理,不静默丢知识流水。
+
+**验证判据**:`R-CONSISTENCY2` —— ① "开天眼"能标(角色引用未获知信息);② 正常认知不误报(已获知的正常引用不标);③ "误以为"维度可记录;④ 若加表:迁移 + 往返;⑤ `tsc` / `check:architecture` / `check:required-tables` / `build` 全绿。
+
+**依赖 / 关系**:收敛路线第 4 步的一块;`PIPELINE-2` 章纲工坊的 gate 复用它。建议在 INVENTORY-1 之后做(同为账本模式,可复用其结构经验)。
+
 # ═══ 待开发 · 物品系统(中大型 · 数据红线) ═══
 
 ## 🔴 INVENTORY-1 · 物品栏按角色归属(配角背包 + 角色切换)
