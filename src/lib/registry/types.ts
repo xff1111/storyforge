@@ -7,6 +7,7 @@
 import type { Table } from 'dexie'
 import type { AIProvider } from '../types/ai'
 import type { ContextLayer, ContextSegment } from '../ai/context-budget'
+import type { PreparedContinuityContext } from '../ai/chapter-memory/continuity-context'
 
 /**
  * 表的归属方式 —— 决定删项目时如何定位该表的记录。
@@ -62,7 +63,7 @@ export interface IndirectRef {
 /** Blob owner(blob 表用特殊 key 计算复用,如 importFiles 给 master 用 100000+workId) */
 export interface BlobOwnerRef {
   kind: 'blob-owner'
-  /** 拥有此 blob 的父表名(如 masterWorks) */
+  /** 拥有此 blob 的父表名 */
   ownerTable: string
   /** 由父表行计算出 blob 主键(如 row => 100000 + row.id) */
   keyResolver: (ownerRow: unknown) => number | string
@@ -73,12 +74,35 @@ export type RefSpec = SimpleRef | JsonRef | ArrayRef | IndirectRef | BlobOwnerRe
 
 /** 导出时的 ID 重映射声明 */
 export interface ExportRemapField {
-  /** 字段名 */
+  /** 字段名(库内真实外键字段) */
   field: string
-  /** 重映射到哪张表的 _exportId(如 'worldGroups' / 'outlineNodes') */
+  /** 重映射到哪张表的导出序号(如 'worldGroups' / 'outlineNodes') */
   remapVia: string
   /** 是否树形自引用(parentId) */
   selfTree?: boolean
+  /**
+   * 导出后该字段在 JSON 里的名字(历史命名,毫无规律,必须逐字段声明以逐字节兼容旧备份)。
+   * 例:worldGroupId → '_worldGroupExportId'、outlineNodeId → '_outlineExportId'、
+   *     fromCharacterId → '_fromCharacterIndex'。
+   */
+  exportAs: string
+  /**
+   * 该外键找不到映射时:
+   * - 'drop'    丢弃整行(孤儿,如 characterRelations 端点角色已删)
+   * - 'require' 导入时抛错并整体回滚(必填外键完整性保护,如 chapters.outlineNodeId)
+   * - 'null' / 省略  置空(可空外键 / worldGroupId / 树 parentId)
+   */
+  onUnmapped?: 'drop' | 'require' | 'null'
+}
+
+/**
+ * JSON 字段内引用的导出重映射(区别于 refs:refs 管删除级联,这里管导出/导入重映射)。
+ * 目前仅 worldNodes.portalsJSON 一种结构(kind: 'portals')。
+ */
+export interface ExportRefRemap {
+  field: string
+  remapVia: string
+  kind: 'portals'
 }
 
 /**
@@ -95,6 +119,11 @@ export interface TableSpec<T = any> {
   projectResolver?: (projectId: number) => Promise<number[]>
   /** 是否带 worldGroupId(参与多世界隔离/盖章/删世界级联) */
   worldScoped?: boolean
+  /**
+   * 导入后必须改写为本行新主键的嵌套字段路径。
+   * 例：chapters.continuityHandoff.chapterId。
+   */
+  selfIdPaths?: string[]
   /** worldGroupId 的字段名(默认 'worldGroupId') */
   worldGroupField?: string
   /** 是否带 homeWorldGroupId(仅 characters) */
@@ -107,6 +136,24 @@ export interface TableSpec<T = any> {
   exportable: boolean
   /** 导出时需要的 ID 重映射 */
   exportRemap?: ExportRemapField[]
+  /**
+   * 导出时是否写显式 `_exportId` 字段(= 该行在导出数组里的下标)。
+   * 被别的表用「_exportId 命名」引用的表要 true(worldGroups/outlineNodes/worldNodes/
+   * references/importantLocations/codexCategories);用「数组下标隐式索引」的表(characters/
+   * chapters)留空。
+   */
+  exportIdField?: boolean
+  /** 导出查询排序字段(仅 worldGroups: 'order',保证导出序稳定 = 世界组重映射依据) */
+  exportOrderBy?: string
+  /** JSON 字段内引用的导出/导入重映射(仅 worldNodes.portalsJSON) */
+  exportRefRemap?: ExportRefRemap[]
+  /**
+   * 导入兜底默认值：声明该表"非可选字段"在缺失时的默认值。
+   * 导入引擎写入前做 `{ ...defaults, ...row }`,保证老数据/跨版本导入的 JSON
+   * 即使缺某个非可选字段,落库时也满足类型不变量(如 outlineNodes.summary 恒为 string)。
+   * 这是「数据进入边界统一兜底」的单一来源,避免在每个读取处散补 `?.`。
+   */
+  defaults?: Record<string, unknown>
   /** 备注(说明为什么这样配) */
   note?: string
 }
@@ -122,7 +169,7 @@ export interface FieldSpec {
   target: string
   /** canonical 字段名 */
   field: string
-  type: 'string' | 'longtext' | 'json' | 'number' | 'boolean' | 'enum' | 'array'
+  type: 'string' | 'longtext' | 'json' | 'object' | 'number' | 'boolean' | 'enum' | 'array'
   enums?: string[]
   worldScoped?: boolean
   aliases?: string[]
@@ -157,6 +204,17 @@ export interface CollectionAdoptionSpec {
 export interface AdoptInput {
   projectId: number
   worldGroupId?: number | null
+  /** 集合表中定点更新既有记录；AI 补全空卷/空章等场景使用。 */
+  recordId?: number
+  /**
+   * NS-1: chapters 派生记忆的原子 compare-and-set。
+   * adopt() 必须在写 summary/handoff 的同一事务中重算当前正文 hash。
+   */
+  compareAndSet?: {
+    kind: 'chapter-source-text-hash'
+    expectedHash: string
+    textNormalizationVersion: string
+  }
   target: string
   data: Record<string, unknown> | Record<string, unknown>[]
   mode: 'replace' | 'append' | 'add' | 'add-many' | 'merge-diffs'
@@ -186,10 +244,15 @@ export interface AssembleContextInput {
   /** Test/override hook. When set, this is the real input budget used for trimming. */
   inputBudgetTokens?: number
   citedReferenceIds?: number[]
-  masterInsightIds?: number[]
   previousChapterEnding?: string
   stateReferenceText?: string
   extraStateIds?: number[]
+  /** 手动输入/当前字段内容，供“内容反推结构化设定”类动作走注册表。 */
+  manualSourceText?: string
+  /** C2 反向哺喂：以某角色为主体，召回剧情里关于 TA 的事实/正文证据（characterFacts/characterPassages 源用）。 */
+  subjectCharacterName?: string
+  /** assembleContext 内部批量预取；调用方无需传。 */
+  continuitySnapshot?: PreparedContinuityContext
 }
 
 export interface ContextSource {
@@ -199,6 +262,8 @@ export interface ContextSource {
   layer: ContextLayer
   /** Approximate per-source soft cap. Adapters can still return less. */
   budgetTokens: number
+  /** NS-1: assembleContext 总预算裁剪时不得整段删除。 */
+  protectedFromTrim?: boolean
   requiresWorldGroupId?: boolean
   requiresOutlineNodeId?: boolean
   requiresChapterId?: boolean
@@ -215,4 +280,5 @@ export interface AssembleContextResult {
   totalInputTokens: number
   inputBudget: number
   overBudgetBeforeTrim: boolean
+  overBudgetAfterTrim: boolean
 }

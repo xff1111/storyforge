@@ -11,6 +11,7 @@ import {
 } from 'lucide-react'
 import { useWorldGroupStore } from '../../stores/world-group'
 import { useAIStream } from '../../hooks/useAIStream'
+import { createAISessionKey } from '../../stores/ai-generation-session'
 import {
   buildInspirationReversePrompt,
   parseReverseOutput,
@@ -21,23 +22,19 @@ import {
   type ReverseMultiWorldResult,
 } from '../../lib/ai/inspiration-reverse'
 import { adopt } from '../../lib/registry/adopt'
+import { CHARACTER_DIMENSIONS } from '../../lib/character/character-dimensions'
 import AIStreamOutput from '../shared/AIStreamOutput'
 import AutoResizeTextarea from '../shared/AutoResizeTextarea'
 import type { Project } from '../../lib/types'
+import { characterAxesLabel } from '../../lib/character/character-axes'
 
 interface Props {
   project: Project
 }
 
-const ROLE_LABELS: Record<string, string> = {
-  protagonist: '主角',
-  antagonist: '反派',
-  supporting: '配角',
-}
-
 export default function InspirationPanel({ project }: Props) {
   const wgStore = useWorldGroupStore()
-  const ai = useAIStream()
+  const ai = useAIStream(createAISessionKey(project.id!, 'inspiration.reverse'))
   const isMW = !!project.enableMultiWorld
 
   const draftKey = `sf-inspiration-draft-${project.id}`
@@ -107,7 +104,7 @@ export default function InspirationPanel({ project }: Props) {
     const messages = isMW
       ? buildInspirationReverseMultiWorldPrompt(project.name, genres, inspiration, userHint || undefined)
       : buildInspirationReversePrompt(project.name, genres, inspiration, userHint || undefined)
-    await ai.start(messages)
+    await ai.start(messages, undefined, { category: 'inspiration.reverse', projectId: project.id! })
   }
 
   // ── 多世界：一键采纳（创建世界组 + 各世界世界观 + 故事核心 + 角色归属）──
@@ -188,16 +185,17 @@ export default function InspirationPanel({ project }: Props) {
           mode: 'add',
           data: {
             name: c.name,
-            role: c.role || 'supporting',
-            shortDescription: c.shortDescription || '',
-            appearance: '',
-            personality: c.personality || '',
-            background: c.background || '',
-            motivation: c.motivation || '',
-            abilities: '',
-            relationships: '',
-            arc: c.arc || '',
+            roleWeight: c.roleWeight,
+            moralAxis: c.moralAxis,
+            orderAxis: c.orderAxis,
             isCrossWorld: c.isCrossWorld,
+            // 维度字段从 CHARACTER_DIMENSIONS 单源派生：解析对象带什么就写什么，
+            // 不硬编码字段表(空值由 adopt 跳过；缺的维度用户可后续 C1 补全)。
+            ...Object.fromEntries(
+              CHARACTER_DIMENSIONS
+                .map(d => [d.key, (c as unknown as Record<string, unknown>)[d.key]])
+                .filter(([, v]) => typeof v === 'string' && v),
+            ),
           },
         })
       }
@@ -237,7 +235,7 @@ export default function InspirationPanel({ project }: Props) {
         lines.push(`## 初始角色`)
         mwResult.characters.forEach(c => {
           const home = c.isCrossWorld ? '跨世界' : (c.homeWorld || '')
-          lines.push(`- **${c.name}**（${ROLE_LABELS[c.role] || c.role}${home ? ` · ${home}` : ''}）：${c.shortDescription}`)
+          lines.push(`- **${c.name}**（${characterAxesLabel(c)}${home ? ` · ${home}` : ''}）：${c.shortDescription}`)
         })
       }
     } else if (result) {
@@ -255,7 +253,7 @@ export default function InspirationPanel({ project }: Props) {
       if (sc.mainPlot) lines.push(`- 主线：${sc.mainPlot}`)
       if (result.characters.length) {
         lines.push(`\n## 初始角色`)
-        result.characters.forEach(c => lines.push(`- **${c.name}**（${ROLE_LABELS[c.role] || c.role}）：${c.shortDescription}`))
+        result.characters.forEach(c => lines.push(`- **${c.name}**（${characterAxesLabel(c)}）：${c.shortDescription}`))
       }
     }
     const blob = new Blob([lines.join('\n')], { type: 'text/markdown' })
@@ -340,15 +338,15 @@ export default function InspirationPanel({ project }: Props) {
         mode: 'add',
         data: {
           name: c.name,
-          role: c.role || 'supporting',
-          shortDescription: c.shortDescription || '',
-          appearance: '',
-          personality: c.personality || '',
-          background: c.background || '',
-          motivation: c.motivation || '',
-          abilities: '',
-          relationships: '',
-          arc: c.arc || '',
+          roleWeight: c.roleWeight,
+          moralAxis: c.moralAxis,
+          orderAxis: c.orderAxis,
+          // 维度字段从 CHARACTER_DIMENSIONS 单源派生（同上：不硬编码字段表）
+          ...Object.fromEntries(
+            CHARACTER_DIMENSIONS
+              .map(d => [d.key, (c as unknown as Record<string, unknown>)[d.key]])
+              .filter(([, v]) => typeof v === 'string' && v),
+          ),
         },
       })
     }
@@ -371,7 +369,7 @@ export default function InspirationPanel({ project }: Props) {
   return (
     <div className="h-full flex flex-col overflow-hidden">
       {/* 顶部标题 */}
-      <div className="flex items-center gap-2 px-4 py-3 border-b border-border-default bg-bg-surface">
+      <div className="flex items-center gap-2 px-4 py-3 border-b border-border bg-bg-surface">
         <Lightbulb className="w-5 h-5 text-yellow-500" />
         <h2 className="text-lg font-semibold text-text-primary">灵感反推</h2>
         <span className="text-xs text-text-muted ml-2">从碎片想法反推完整故事框架</span>
@@ -388,16 +386,26 @@ export default function InspirationPanel({ project }: Props) {
       <div className="flex-1 overflow-y-auto p-4 space-y-5">
         {/* ── 灵感输入 ────────────────────────────── */}
         <section>
-          <label className="block text-sm font-medium text-text-primary mb-2">
+          <label className="block text-sm font-medium text-text-primary mb-1">
             写下你的灵感
           </label>
+          {/* CF-5: 明确适用边界，避免用户误把长篇正文粘进来 */}
+          <p className="text-xs text-text-muted mb-2">
+            适合<strong>短灵感 / 梗概 / 片段想法</strong>（几句到一两段）。要从<strong>整章 / 整本正文</strong>提取设定，请用「文档解析 / 项目参考导入」，效果更完整。
+          </p>
           <AutoResizeTextarea
             value={inspiration}
             onChange={e => setInspiration(e.target.value)}
             placeholder={"随便写点什么...\n\n例如：\n- 一个在末世废墟中寻找失踪妹妹的退役军人\n- 古代宫廷里，一个替身公主发现了皇帝的秘密\n- 赛博朋克 + 修仙，用代码修炼的程序员\n- 甚至只是几个关键词：深海、孤岛、失忆、怪物"}
-            className="w-full text-sm bg-bg-base border border-border-default rounded-lg px-4 py-3 text-text-primary placeholder:text-text-muted resize-none"
+            className="w-full text-sm bg-bg-base border border-border rounded-lg px-4 py-3 text-text-primary placeholder:text-text-muted resize-none"
             minRows={5}
           />
+          {/* CF-5: 超长非阻断提示——不静默截断，明确告知只适合短文本 */}
+          {inspiration.length > 1500 && (
+            <p className="mt-1.5 text-xs text-warning">
+              ⚠️ 当前输入约 {inspiration.length} 字，偏长。灵感反推面向短灵感设计，过长内容 AI 可能只吃前半段；长篇正文请改用「文档解析 / 项目参考导入」。
+            </p>
+          )}
         </section>
 
         {/* ── 补充说明 ────────────────────────────── */}
@@ -407,7 +415,7 @@ export default function InspirationPanel({ project }: Props) {
             value={userHint}
             onChange={e => setUserHint(e.target.value)}
             placeholder="例如：偏黑暗风格、需要感情线、主角要有反转..."
-            className="w-full text-sm bg-bg-base border border-border-default rounded px-3 py-2 text-text-primary placeholder:text-text-muted resize-none"
+            className="w-full text-sm bg-bg-base border border-border rounded px-3 py-2 text-text-primary placeholder:text-text-muted resize-none"
             minRows={2}
           />
         </section>
@@ -417,7 +425,7 @@ export default function InspirationPanel({ project }: Props) {
           <button
             onClick={handleGenerate}
             disabled={!inspiration.trim() || ai.isStreaming}
-            className="flex items-center gap-1.5 px-4 py-2 bg-brand-primary text-white rounded-lg text-sm font-medium hover:bg-brand-primary/90 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            className="flex items-center gap-1.5 px-4 py-2 bg-accent text-white rounded-lg text-sm font-medium hover:bg-accent-hover disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
           >
             {ai.isStreaming ? (
               <Loader2 className="w-4 h-4 animate-spin" />
@@ -504,7 +512,7 @@ export default function InspirationPanel({ project }: Props) {
                 {mwResult.characters.map((c, i) => (
                   <div key={i} className="text-xs">
                     <span className="text-text-primary font-medium">{c.name}</span>
-                    <span className="text-text-muted"> · {ROLE_LABELS[c.role] || c.role}</span>
+                    <span className="text-text-muted"> · {characterAxesLabel(c)}</span>
                     {c.isCrossWorld ? <span className="ml-1 text-accent">🌐 跨世界</span> : c.homeWorld && <span className="ml-1 text-text-muted">@{c.homeWorld}</span>}
                     {c.shortDescription && <span className="text-text-muted"> — {c.shortDescription}</span>}
                   </div>
@@ -647,7 +655,7 @@ function ResultCard({
   children: React.ReactNode
 }) {
   return (
-    <div className="border border-border-default rounded-lg overflow-hidden">
+    <div className="border border-border rounded-lg overflow-hidden">
       <div
         className="flex items-center justify-between px-4 py-2.5 bg-bg-surface cursor-pointer hover:bg-bg-hover transition-colors"
         onClick={onToggle}
@@ -673,7 +681,7 @@ function ResultCard({
         )}
       </div>
       {expanded && (
-        <div className="px-4 py-3 border-t border-border-default">
+        <div className="px-4 py-3 border-t border-border">
           {children}
         </div>
       )}
@@ -685,7 +693,7 @@ function FieldRow({ label, value, highlight }: { label: string; value: string; h
   return (
     <div>
       <span className="text-xs text-text-muted">{label}：</span>
-      <span className={`text-text-primary ${highlight ? 'font-medium text-brand-primary' : ''}`}>
+      <span className={`text-text-primary ${highlight ? 'font-medium text-accent' : ''}`}>
         {value}
       </span>
     </div>
@@ -701,23 +709,23 @@ function CharacterCard({
   adopted: boolean
 }) {
   return (
-    <div className={`border rounded-lg p-3 transition-colors ${selected ? 'border-brand-primary bg-brand-primary/5' : 'border-border-default'}`}>
+    <div className={`border rounded-lg p-3 transition-colors ${selected ? 'border-accent bg-accent/10' : 'border-border'}`}>
       <div className="flex items-center gap-2 mb-2">
         {!adopted && (
           <input
             type="checkbox"
             checked={selected}
             onChange={onToggle}
-            className="accent-brand-primary"
+            className="accent-accent"
           />
         )}
         <span className="text-sm font-medium text-text-primary">{char.name}</span>
         <span className="text-xs px-1.5 py-0.5 bg-bg-hover rounded text-text-muted">
-          {ROLE_LABELS[char.role] || char.role}
+          {characterAxesLabel(char)}
         </span>
       </div>
       {char.shortDescription && (
-        <p className="text-xs text-brand-primary mb-1">{char.shortDescription}</p>
+        <p className="text-xs text-accent mb-1">{char.shortDescription}</p>
       )}
       <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-text-muted">
         {char.personality && <span>性格：{char.personality}</span>}

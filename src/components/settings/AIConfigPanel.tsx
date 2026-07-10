@@ -1,14 +1,17 @@
 import { useState, useEffect, useSyncExternalStore } from 'react'
 import { Wifi, WifiOff, Eye, EyeOff, CheckCircle, Trash2, ScrollText } from 'lucide-react'
 import { useAIConfigStore, type TestResult } from '../../stores/ai-config'
+import EmbeddingConfigCard from './EmbeddingConfigCard'
 import type { AIProvider } from '../../lib/types'
 import { PROVIDER_MODELS } from '../../lib/types'
 import { getLogs, subscribeLogs, clearLogs, formatLog } from '../../lib/ai/logger'
+import { applyStoryForgeTheme, resolveStoryForgeTheme, THEME_OPTIONS, type StoryForgeTheme } from '../../lib/theme'
+import { useDialog } from '../shared/Dialog'
 
-const PROVIDER_OPTIONS: { value: AIProvider; label: string; cors: boolean; hint: string }[] = [
+export const PROVIDER_OPTIONS: { value: AIProvider; label: string; cors: boolean; hint: string }[] = [
   { value: 'deepseek', label: 'DeepSeek', cors: false, hint: '获取 Key: platform.deepseek.com → API Keys（需点击下方「切换到本地代理」）' },
   { value: 'qwen', label: '通义千问', cors: true, hint: '获取 Key: dashscope.console.aliyun.com → API-KEY 管理' },
-  { value: 'doubao', label: '豆包', cors: true, hint: '获取 Key: console.volcengine.com → 模型推理 → API Key' },
+  { value: 'doubao', label: '豆包', cors: false, hint: '获取 Key: console.volcengine.com → 模型推理 → API Key（火山引擎不支持浏览器直连，需点击下方「切换到本地代理」）' },
   { value: 'minimax', label: 'MiniMax', cors: true, hint: '获取 Key: platform.minimaxi.com → API Keys' },
   { value: 'glm', label: '智谱 GLM', cors: true, hint: '获取 Key: open.bigmodel.cn → API Keys' },
   { value: 'wenxin', label: '文心一言', cors: true, hint: '获取 Key: console.bce.baidu.com → 千帆大模型 → API Key' },
@@ -19,25 +22,27 @@ const PROVIDER_OPTIONS: { value: AIProvider; label: string; cors: boolean; hint:
   { value: 'claude', label: 'Claude', cors: false, hint: '获取 Key: console.anthropic.com → API Keys（需点击下方「切换到本地代理」）' },
   { value: 'nvidia', label: 'NVIDIA NIM', cors: false, hint: '获取 Key: build.nvidia.com → 登录后获取 API Key（需点击下方「切换到本地代理」）' },
   { value: 'modelscope', label: '魔搭社区', cors: true, hint: '获取 Key: modelscope.cn → 我的 → Access Token' },
-  { value: 'ollama', label: 'Ollama (本地)', cors: true, hint: '本地运行 Ollama，无需 API Key' },
+  { value: 'agnes', label: 'Agnes AI（免费）', cors: true, hint: '清华系免费全模态 · 获取 Key: platform.agnes-ai.com（若连不上可点下方「切换到本地代理」）' },
+  { value: 'longcat', label: 'LongCat（美团）', cors: false, hint: '获取 Key: longcat.chat 平台控制台；OpenAI 兼容接口（若浏览器直连 CORS 失败可切换本地代理）' },
+  { value: 'opencode', label: 'OpenCode Go（月付）', cors: false, hint: '获取 Key: opencode.ai → Zen → Go API Key（需点击下方「切换到本地代理」）' },
+  { value: 'ollama', label: '本地模型 (Ollama / LM Studio 等)', cors: true, hint: '本地 OpenAI-compatible /v1 接口；Ollama 常用 http://localhost:11434/v1，LM Studio 常用 http://localhost:1234/v1；通常无需 API Key。' },
   { value: 'custom', label: '自定义', cors: true, hint: '填写任何兼容 OpenAI 格式的 API' },
-]
-
-const THEME_OPTIONS = [
-  { value: 'forge',  label: '熔炉',   emoji: '🔥', desc: '暗夜琥珀 · 火光余烬', swatches: ['#1A0F0A', '#D97757', '#C8A155'] },
-  { value: 'scroll', label: '古卷',   emoji: '📜', desc: '旧纸染黄 · 铁胆墨香', swatches: ['#E5D5A8', '#7B3A1A', '#8B5E1A'] },
-  { value: 'paper',  label: '纸与墨', emoji: '🖊', desc: '素纸如雪 · 墨迹清朗', swatches: ['#FAF7F0', '#B85C3F', '#8A7E6A'] },
 ]
 
 export default function AIConfigPanel() {
   const { config, setConfig, switchProvider, testConnection,
-    presets, activePresetId, saveAsPreset, applyPreset, updatePresetFromCurrent, renamePreset, deletePreset } = useAIConfigStore()
+    rememberApiKey, setRememberApiKey,
+    presets, activePresetId, editingPresetId, saveAsPreset, applyPreset, updatePresetFromCurrent, renamePreset, deletePreset } = useAIConfigStore()
+  const dialog = useDialog()
   const [showKey, setShowKey] = useState(false)
   const [testing, setTesting] = useState(false)
   const [testResult, setTestResult] = useState<TestResult | null>(null)
   const [showLogs, setShowLogs] = useState(false)
   const [savingPreset, setSavingPreset] = useState(false)
   const [presetName, setPresetName] = useState('')
+  const [currentTheme, setCurrentTheme] = useState<StoryForgeTheme>(() =>
+    resolveStoryForgeTheme(localStorage.getItem('storyforge-theme')),
+  )
 
   const handleSavePreset = () => {
     if (!presetName.trim()) return
@@ -49,21 +54,42 @@ export default function AIConfigPanel() {
   // 订阅日志变化
   const logs = useSyncExternalStore(subscribeLogs, getLogs)
 
-  const currentTheme = localStorage.getItem('storyforge-theme') || 'forge'
   const currentProviderInfo = PROVIDER_OPTIONS.find((p) => p.value === config.provider)
+  const editingPreset = editingPresetId ? presets.find(p => p.id === editingPresetId) : null
 
   const handleTest = async () => {
     setTesting(true)
     setTestResult(null)
-    const result = await testConnection()
-    setTestResult(result)
-    setTesting(false)
+    try {
+      const result = await testConnection()
+      setTestResult(result)
+    } finally {
+      setTesting(false)
+    }
   }
 
-  const handleThemeChange = (theme: string) => {
-    localStorage.setItem('storyforge-theme', theme)
-    document.documentElement.setAttribute('data-theme', theme)
-    window.dispatchEvent(new Event('themechange'))
+  const handleThemeChange = (theme: StoryForgeTheme) => {
+    setCurrentTheme(theme)
+    applyStoryForgeTheme(theme)
+  }
+
+  const handleRenamePreset = async (id: string, currentName: string) => {
+    const name = await dialog.prompt({
+      title: '重命名预设',
+      defaultValue: currentName,
+      placeholder: '输入新的预设名称',
+    })
+    if (name?.trim()) renamePreset(id, name.trim())
+  }
+
+  const handleDeletePreset = async (id: string, name: string) => {
+    const ok = await dialog.confirm({
+      title: `删除预设「${name}」？`,
+      message: '此操作不可恢复。',
+      confirmText: '删除',
+      tone: 'danger',
+    })
+    if (ok) deletePreset(id)
   }
 
   // 切换 provider 时清空测试结果
@@ -78,12 +104,31 @@ export default function AIConfigPanel() {
       {/* AI 配置 */}
       <div className="bg-bg-surface border border-border rounded-xl p-5 mb-6">
         <h3 className="text-base font-semibold text-text-primary mb-4">AI 模型配置</h3>
+        <p className="text-[11px] text-text-muted mb-4 rounded-lg border border-border bg-bg-base px-3 py-2">
+          API Key 默认仅保存在本次浏览器会话；勾选“记住在本机”才会写入 localStorage。发起 AI 生成、测试连接或使用自定义 baseUrl 时，相关提示词和上下文会发送到你配置的模型服务。
+        </p>
 
         {/* ── API 配置预设（多套一键切换） ── */}
         <div className="mb-4 pb-4 border-b border-border/50">
           <div className="flex items-center justify-between mb-2">
             <label className="text-sm text-text-secondary">配置预设</label>
-            {savingPreset ? (
+            {editingPreset && !savingPreset ? (
+              <div className="flex items-center gap-1.5">
+                <button
+                  onClick={() => updatePresetFromCurrent(editingPreset.id)}
+                  title={`用当前表单内容覆盖「${editingPreset.name}」`}
+                  className="text-xs px-2.5 py-1 rounded-lg bg-accent text-white hover:bg-accent-hover transition-colors"
+                >
+                  保存修改到「{editingPreset.name}」
+                </button>
+                <button
+                  onClick={() => setSavingPreset(true)}
+                  className="text-xs px-2.5 py-1 rounded-lg bg-bg-elevated text-text-secondary border border-border hover:text-accent hover:border-accent/50 transition-colors"
+                >
+                  另存为新预设
+                </button>
+              </div>
+            ) : savingPreset ? (
               <div className="flex items-center gap-1.5">
                 <input
                   autoFocus
@@ -127,15 +172,15 @@ export default function AIConfigPanel() {
                       onClick={() => updatePresetFromCurrent(p.id)}
                       title="用当前配置覆盖此预设"
                       className="opacity-70 hover:opacity-100"
-                    >💾</button>
+                    >保存</button>
                   )}
                   <button
-                    onClick={() => { const n = prompt('重命名预设', p.name); if (n) renamePreset(p.id, n) }}
+                    onClick={() => { void handleRenamePreset(p.id, p.name) }}
                     title="重命名"
                     className="opacity-0 group-hover:opacity-70 hover:opacity-100"
                   >✎</button>
                   <button
-                    onClick={() => { if (confirm(`删除预设「${p.name}」？`)) deletePreset(p.id) }}
+                    onClick={() => { void handleDeletePreset(p.id, p.name) }}
                     title="删除"
                     className="opacity-0 group-hover:opacity-70 hover:opacity-100 hover:text-red-400"
                   >✕</button>
@@ -184,6 +229,17 @@ export default function AIConfigPanel() {
                 {showKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
               </button>
             </div>
+            <label className="mt-2 flex items-start gap-2 text-[11px] text-text-secondary cursor-pointer">
+              <input
+                type="checkbox"
+                checked={rememberApiKey}
+                onChange={e => setRememberApiKey(e.target.checked)}
+                className="mt-0.5 accent-accent"
+              />
+              <span>
+                在本机记住 API Key（写入 localStorage）。不勾选时仅本次浏览器会话有效。
+              </span>
+            </label>
           </div>
 
           <div className="grid grid-cols-2 gap-4">
@@ -195,6 +251,27 @@ export default function AIConfigPanel() {
                 onChange={(e) => setConfig({ baseUrl: e.target.value })}
                 className="w-full px-3 py-2 bg-bg-base border border-border rounded-lg text-text-primary text-sm focus:outline-none focus:border-accent transition-colors"
               />
+              {['custom', 'ollama'].includes(config.provider) && (
+                <div className="mt-1.5 flex flex-wrap gap-1.5">
+                  <button
+                    onClick={() => setConfig({ provider: 'custom', baseUrl: 'http://localhost:1234/v1', apiKey: config.apiKey || 'lm-studio', model: 'qwen3-14b' })}
+                    className="text-xs px-2 py-1 rounded bg-bg-elevated text-text-secondary border border-border hover:text-accent hover:border-accent/50 transition-colors"
+                  >
+                    LM Studio
+                  </button>
+                  <button
+                    onClick={() => setConfig({ provider: 'ollama', baseUrl: 'http://localhost:11434/v1', apiKey: config.apiKey || 'ollama', model: 'qwen2.5:7b' })}
+                    className="text-xs px-2 py-1 rounded bg-bg-elevated text-text-secondary border border-border hover:text-accent hover:border-accent/50 transition-colors"
+                  >
+                    本地 Ollama
+                  </button>
+                </div>
+              )}
+              {['custom', 'ollama'].includes(config.provider) && (
+                <p className="mt-1 text-[11px] text-text-muted">
+                  本地模型请选择 OpenAI 兼容接口，Base URL 填到 /v1；Ollama 常用 :11434/v1，LM Studio 常用 :1234/v1。不要填 /v1/models 或 /chat/completions，测试时会自动修正常见误填。
+                </p>
+              )}
               {(() => {
                 // 需要代理的 provider 及其代理路径 / 原始地址映射
                 const PROXY_MAP: Record<string, { proxy: string; direct: string }> = {
@@ -203,6 +280,10 @@ export default function AIConfigPanel() {
                   kimi:     { proxy: '/kimi-proxy/v1',     direct: 'https://api.moonshot.cn/v1' },
                   claude:   { proxy: '/claude-proxy/v1',   direct: 'https://api.anthropic.com/v1' },
                   nvidia:   { proxy: '/nvidia-proxy/v1',   direct: 'https://integrate.api.nvidia.com/v1' },
+                  doubao:   { proxy: '/doubao-proxy/api/v3', direct: 'https://ark.cn-beijing.volces.com/api/v3' },
+                  agnes:    { proxy: '/agnes-proxy/v1',    direct: 'https://apihub.agnes-ai.com/v1' },
+                  longcat:  { proxy: '/longcat-proxy/openai/v1', direct: 'https://api.longcat.chat/openai/v1' },
+                  opencode: { proxy: '/opencode-proxy/v1',  direct: 'https://opencode.ai/zen/go/v1' },
                 }
                 const pm = PROXY_MAP[config.provider]
                 if (!pm) return null
@@ -348,7 +429,7 @@ export default function AIConfigPanel() {
             <div className="flex items-center gap-3">
               <button
                 onClick={handleTest}
-                disabled={testing || !config.apiKey}
+                disabled={testing || (!config.apiKey && !['custom', 'ollama'].includes(config.provider))}
                 className="flex items-center gap-2 px-4 py-2 bg-accent/10 text-accent rounded-lg hover:bg-accent/20 disabled:opacity-40 transition-colors text-sm"
               >
                 {testing ? (
@@ -391,6 +472,9 @@ export default function AIConfigPanel() {
           </div>
         </div>
       </div>
+
+      {/* NS-5 · 语义检索(embedding) 配置卡 */}
+      <EmbeddingConfigCard />
 
       {/* 日志面板 */}
       {showLogs && (

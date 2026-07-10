@@ -5,6 +5,7 @@ import { useWorldGroupStore } from '../../stores/world-group'
 import WorldGroupSwitcher from '../world-group/WorldGroupSwitcher'
 import { InlineTextarea } from '../shared/InlineEdit'
 import { useAIStream } from '../../hooks/useAIStream'
+import { createAISessionKey } from '../../stores/ai-generation-session'
 import { buildWorldviewPrompt } from '../../lib/ai/adapters/worldview-adapter'
 import { assembleContext } from '../../lib/registry/assemble-context'
 import AIStreamOutput from '../shared/AIStreamOutput'
@@ -16,7 +17,6 @@ import type { FieldGenerationMode } from '../../lib/ai/field-generation-context'
 async function buildRulesSourceContext(projectId: number, worldGroupId: number | null): Promise<string> {
   return (await assembleContext({ projectId, worldGroupId, sourceKeys: ['worldRules'] })).text
 }
-import CurrencyPanel from './CurrencyPanel'
 import CodexPanel from '../codex/CodexPanel'
 import CodexSearchBar from '../codex/CodexSearchBar'
 
@@ -40,7 +40,7 @@ const FIELDS: FieldMeta[] = [
   { key: 'cities',    field: 'regionDimensions',       emoji: '🏰', label: '城池重镇',       description: '核心城市、军事重镇、商业都会的分布与格局' },
   { key: 'pec',       field: 'politicsEconomyCulture', emoji: '🏛', label: '政治/经济/文化', description: '政体 / 货币 / 赋税 / 阶层制度 / 宗教信仰 / 风俗节庆' },
   { key: 'conflicts', field: 'internalConflicts',      emoji: '🔥', label: '矛盾冲突',       description: '社会内在矛盾 / 阶级冲突 / 个体与集体冲突 / 与外部世界的张力' },
-  { key: 'items',     field: 'itemDesign',             emoji: '🗡', label: '道具与器物',     description: '武器 / 法器 / 工具 / 科技装备……物品的来源、品级、规则', hint: '这里写物品体系概述；具体道具条目请到本面板「📚 人文主体·人工器物」词条逐条管理，主角随身物品由「🎒 物品栏」自动追踪。' },
+  { key: 'items',     field: 'itemDesign',             emoji: '🗡', label: '道具与器物',     description: '武器 / 法器 / 工具 / 科技装备……物品的来源、品级、规则', hint: '这里写物品体系概述；具体道具在下方「📚 道具与器物 · 具体词条」逐条管理，主角实际获得与消耗的物品由创作区「🎒 物品栏」追踪。' },
 ]
 
 // 每个方面(子页) → 其专属词条分类(builtInKey)。下方只显示该方面对应的词条。
@@ -146,7 +146,7 @@ export default function WorldviewHumanityPanel({ project }: Props) {
 
       <div className="flex flex-1 overflow-hidden">
         {/* ── 左侧导航 ── */}
-        <nav className="w-48 flex-shrink-0 border-r border-border overflow-y-auto py-4 pr-1">
+        <nav className="w-max min-w-32 max-w-44 flex-shrink-0 border-r border-border overflow-y-auto py-4 pr-1">
           {FIELDS.map(f => {
             const isActive = f.key === activeKey
             const isFieldStreaming = streamingKeys.has(f.key)
@@ -185,18 +185,17 @@ export default function WorldviewHumanityPanel({ project }: Props) {
                 contextSummary={buildCtx(f.key)}
                 onStreamingChange={streaming => handleStreamingChange(f.key, streaming)}
               />
-              {/* Phase 23.2: 在经济文化字段下追加货币面板 */}
-              {f.key === 'pec' && (
-                <div className="mt-6 max-w-3xl">
-                  <CurrencyPanel projectId={project.id!} />
-                </div>
-              )}
               {/* 词条（下）：在全貌之下,把"本方面"细化为一个个具体条目(只显示对应那一类,可打星) */}
               {HUMANITY_CODEX_KEYS[f.key] && (
                 <div className="mt-6">
                   <h3 className="text-sm font-semibold text-text-primary mb-1">📚 {f.label} · 具体词条</h3>
                   <p className="text-xs text-text-muted mb-3">在上面写完整体「全貌」后，这里把「{f.label}」逐条细化登记，可自定义字段、打重要度星级，并进入 AI 生成上下文。</p>
-                  <CodexPanel project={project} fixedCategoryKeys={HUMANITY_CODEX_KEYS[f.key]} embedded />
+                  <CodexPanel
+                    project={project}
+                    fixedCategoryKeys={HUMANITY_CODEX_KEYS[f.key]}
+                    extractionSourceText={values[f.key] || ''}
+                    embedded
+                  />
                 </div>
               )}
             </div>
@@ -224,8 +223,12 @@ function HumanityFieldEditor({
   const [systemOverride, setSystemOverride] = useState<string | null>(null)
   const [userOverride, setUserOverride] = useState<string | null>(null)
   const [mode, setMode] = useState<FieldGenerationMode>('expand')
-  const ai = useAIStream()
   const activeGroupId = useWorldGroupStore(s => s.activeGroupId)
+  const ai = useAIStream(createAISessionKey(
+    project.id!,
+    'worldview.dimension',
+    `${activeGroupId ?? 'global'}:${meta.key}`,
+  ))
 
   useEffect(() => {
     onStreamingChange(ai.isStreaming)
@@ -246,7 +249,7 @@ function HumanityFieldEditor({
     const messages = buildWorldviewPrompt(
       meta.label, project.name, project.genre || '', contextSummary, hint, opts, value, mode,
     )
-    ai.start(messages)
+    ai.start(messages, undefined, { category: 'worldview.dimension', projectId: project.id! })
   }
 
   return (

@@ -1,7 +1,11 @@
 import { useState } from 'react'
 import { ChevronDown, ChevronUp, RotateCcw, Save, Settings2 } from 'lucide-react'
 import { usePromptStore } from '../../stores/prompt'
+import { useAIConfigStore } from '../../stores/ai-config'
+import { getModelPreset } from '../../lib/ai/context-budget'
 import type { PromptModuleKey, PromptParameter, PromptTemplate } from '../../lib/types/prompt'
+import { useDialog } from './Dialog'
+import { useToast } from './Toast'
 
 interface Props {
   /** 当前调用使用的 moduleKey */
@@ -17,6 +21,8 @@ interface Props {
   onUserOverrideChange: (next: string | null) => void
   /** 折叠状态可由外层控制（默认折叠） */
   defaultOpen?: boolean
+  open?: boolean
+  onOpenChange?: (open: boolean) => void
 }
 
 /**
@@ -31,7 +37,11 @@ export default function PromptRunPanel({
   systemOverride, onSystemOverrideChange,
   userOverride, onUserOverrideChange,
   defaultOpen = false,
+  open: controlledOpen,
+  onOpenChange,
 }: Props) {
+  const dialog = useDialog()
+  const toast = useToast()
   const templates = usePromptStore(s => s.templates)
   const cloneTemplate = usePromptStore(s => s.cloneTemplate)
   const saveTemplate = usePromptStore(s => s.saveTemplate)
@@ -41,8 +51,13 @@ export default function PromptRunPanel({
             ?? templates.find(t => t.moduleKey === moduleKey && t.scope === 'system' && t.isActive)
             ?? templates.find(t => t.moduleKey === moduleKey)
 
-  const [open, setOpen] = useState(defaultOpen)
+  const [internalOpen, setInternalOpen] = useState(defaultOpen)
   const [showAdvanced, setShowAdvanced] = useState(false)
+  const open = controlledOpen ?? internalOpen
+  const setOpen = (next: boolean) => {
+    if (controlledOpen === undefined) setInternalOpen(next)
+    onOpenChange?.(next)
+  }
 
   if (!tpl) {
     return (
@@ -57,7 +72,11 @@ export default function PromptRunPanel({
 
   /** 把当前覆盖另存为新的"我的"模板 */
   const handleSaveAs = async () => {
-    const name = prompt('新模板名称：', `${tpl.name}（我的微调）`)
+    const name = await dialog.prompt({
+      title: '另存为新模板',
+      defaultValue: `${tpl.name}（我的微调）`,
+      placeholder: '输入模板名称',
+    })
     if (!name) return
     const newId = await cloneTemplate(tpl.id!, name)
     // 把当前覆盖写入新模板
@@ -79,7 +98,7 @@ export default function PromptRunPanel({
       onParamChange({})
       onSystemOverrideChange(null)
       onUserOverrideChange(null)
-      alert(`已另存为「${name}」。在「提示词库」里把它设为激活即可使用。`)
+      toast.success(`已另存为「${name}」。在「提示词库」里把它设为激活即可使用。`)
     }
   }
 
@@ -93,7 +112,7 @@ export default function PromptRunPanel({
     <div className="bg-bg-elevated border border-border rounded-lg text-xs">
       {/* 头部 */}
       <button
-        onClick={() => setOpen(v => !v)}
+        onClick={() => setOpen(!open)}
         className="w-full flex items-center justify-between px-3 py-2 hover:bg-bg-hover transition-colors"
       >
         <div className="flex items-center gap-2">
@@ -196,9 +215,15 @@ function ParamControl({
   value: unknown
   onChange: (v: unknown) => void
 }) {
+  const aiConfig = useAIConfigStore(s => s.config)
   const enabled = !param.optional || (value !== undefined && value !== '')
   // 显示用值（用户值或默认值）
   const shown = value !== undefined && value !== '' ? value : param.default
+
+  // 字数类滑块:上限动态 = 当前模型最大输出换算字数(token×1.5);否则用静态 param.max
+  const sliderMax = param.maxFromModelOutput
+    ? Math.max(param.min ?? 0, Math.round((getModelPreset(aiConfig.provider, aiConfig.model).maxOutput * 1.5) / 100) * 100)
+    : param.max
 
   return (
     <div className="flex items-center gap-2">
@@ -230,16 +255,23 @@ function ParamControl({
           <input
             type="range"
             min={param.min}
-            max={param.max}
+            max={sliderMax}
             step={param.step ?? 1}
-            value={Number(shown)}
+            value={Math.min(Number(shown), Number(sliderMax))}
             onChange={e => onChange(Number(e.target.value))}
             disabled={!enabled}
             className="flex-1 accent-accent disabled:opacity-50"
           />
-          <span className={`w-12 text-right ${enabled ? 'text-text-primary' : 'text-text-muted'}`}>
-            {String(shown)}
-          </span>
+          {/* 可编辑数字框：能手填任意值（含超过滑块上限），滑块只作快速拖拽 */}
+          <input
+            type="number"
+            min={param.min}
+            step={param.step ?? 1}
+            value={Number(shown)}
+            onChange={e => onChange(Number(e.target.value))}
+            disabled={!enabled}
+            className={`w-16 px-1 py-0.5 text-right bg-bg-base border border-border rounded disabled:opacity-50 focus:outline-none focus:border-accent ${enabled ? 'text-text-primary' : 'text-text-muted'}`}
+          />
         </>
       )}
       {param.type === 'number' && (

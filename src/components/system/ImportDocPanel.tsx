@@ -9,11 +9,12 @@ import { detectVolumeStructure, type VolumeDetectResult } from '../../lib/import
 import {
   runSession, pausePipeline, cancelPipeline, retryFailedChunks,
   registerChunkTexts, hasChunkTexts, clearChunkTexts,
-  applyReferenceFromSession,
+  applyReferenceFromSession, applyProjectFromSession,
 } from '../../lib/import/pipeline'
 import type { ReferenceAnalysisDepth } from '../../lib/types'
 import { useImportSessionStore } from '../../stores/import-session'
 import { useImportStatusStore } from '../../stores/import-status'
+import { useOutlineStore } from '../../stores/outline'
 import { useWorldGroupStore } from '../../stores/world-group'
 import ImportConfirmModal from './import/ImportConfirmModal'
 import ImportReportModal from './import/ImportReportModal'
@@ -25,6 +26,8 @@ import ImportUploadZone from './import/ImportUploadZone'
 import type { Project } from '../../lib/types'
 import type { ImportSession, ChunkState, ImportTarget } from '../../lib/types/import-session'
 import type { SidebarModule } from '../layout/Sidebar'
+import { useDialog } from '../shared/Dialog'
+import { useToast } from '../shared/Toast'
 
 interface Props {
   project: Project
@@ -46,6 +49,8 @@ const DEFAULT_CHUNK_SIZE = 50000
  *   · 调 navigator.storage.persist() 防止浏览器 GC 掉 Blob
  */
 export default function ImportDocPanel({ project, onNavigate }: Props) {
+  const dialog = useDialog()
+  const toast = useToast()
   const [filename, setFilename] = useState('')
   const [rawText, setRawText] = useState('')
   const [fileError, setFileError] = useState<string | null>(null)
@@ -239,7 +244,7 @@ export default function ImportDocPanel({ project, onNavigate }: Props) {
   const handleConfirmStart = async (importTarget: ImportTarget, selectedWorldGroupId?: number | null, depth?: import('../../lib/types').ReferenceAnalysisDepth) => {
     if (!plans) return
     if (importTarget === 'project' && project.enableMultiWorld && selectedWorldGroupId == null) {
-      alert('请先选择本次导入要写入的目标世界。')
+      toast.error('请先选择本次导入要写入的目标世界。')
       return
     }
     setShowConfirm(false)
@@ -291,7 +296,6 @@ export default function ImportDocPanel({ project, onNavigate }: Props) {
     // Phase 28.4: 如果检测到分卷结构，且是导入当前项目，先预写卷结构骨架
     if (importTarget === 'project' && volumeDetect?.hasVolumes) {
       try {
-        const { useOutlineStore } = await import('../../stores/outline')
         const olStore = useOutlineStore.getState()
         await olStore.loadAll(project.id!)
         const startOrder = useOutlineStore.getState().nodes
@@ -330,6 +334,28 @@ export default function ImportDocPanel({ project, onNavigate }: Props) {
     })
   }
 
+  // ── 解析一次·多次落地:复用已完成会话,灌进当前项目设定库(世界观/角色/大纲),不再解析 ──
+  const handleReuseToProject = async () => {
+    if (!reusable?.id || applyingReuse) return
+    setApplyingReuse(true)
+    const statusStore = useImportStatusStore.getState()
+    statusStore.reset()
+    statusStore.setPhase('preparing')
+    statusStore.pushActivity('info', `♻️ 复用已解析《${reusable.filename}》→ 当前项目设定库（不重新解析）`)
+    try {
+      await applyProjectFromSession(project.id!, reusable, null, statusStore)
+      statusStore.setPhase('done')
+      setReusable(null)
+      toast.success('对标设定已灌入当前项目的世界观 / 角色 / 大纲')
+    } catch (err) {
+      console.error('[import] 复用应用到项目失败：', err)
+      statusStore.setPhase('failed')
+      toast.error(`复用失败：${err instanceof Error ? err.message : '未知错误'}`)
+    } finally {
+      setApplyingReuse(false)
+    }
+  }
+
   // ── 解析一次·多次落地:复用已完成会话,应用到项目参考(浅/深),不再解析 ──
   const handleReuseToReference = async (depth: ReferenceAnalysisDepth) => {
     if (!reusable?.id || applyingReuse) return
@@ -346,7 +372,7 @@ export default function ImportDocPanel({ project, onNavigate }: Props) {
     } catch (err) {
       console.error('[import] 复用应用到参考失败：', err)
       statusStore.setPhase('failed')
-      alert(`复用失败：${err instanceof Error ? err.message : '未知错误'}`)
+      toast.error(`复用失败：${err instanceof Error ? err.message : '未知错误'}`)
     } finally {
       setApplyingReuse(false)
     }
@@ -356,7 +382,7 @@ export default function ImportDocPanel({ project, onNavigate }: Props) {
   const handleResume = async () => {
     if (!unfinished?.id) return
     if (!hasChunkTexts(unfinished.id)) {
-      alert('⚠ 原文丢失且 Blob 恢复失败。请重新上传同一文件后再点"用当前文件续跑"。')
+      toast.error('原文丢失且 Blob 恢复失败。请重新上传同一文件后再点"用当前文件续跑"。')
       return
     }
     autoReportShown.current = null
@@ -369,17 +395,20 @@ export default function ImportDocPanel({ project, onNavigate }: Props) {
     if (!unfinished?.id || !rawText) return
     const newHash = quickHash(rawText)
     if (newHash !== unfinished.fileHash) {
-      const ok = confirm(
-        `⚠ 上传的文件与未完成任务的原文不一致。\n\n` +
-        `原任务文件 hash: ${unfinished.fileHash}\n` +
-        `当前上传 hash:   ${newHash}\n\n` +
-        `仍要用当前文件继续吗？（强烈不建议 —— 可能会出现角色/章节错位）`,
-      )
+      const ok = await dialog.confirm({
+        title: '上传文件与未完成任务不一致',
+        message:
+          `原任务文件 hash: ${unfinished.fileHash}\n` +
+          `当前上传 hash:   ${newHash}\n\n` +
+          '仍要用当前文件继续吗？强烈不建议，可能会出现角色/章节错位。',
+        confirmText: '仍要继续',
+        tone: 'danger',
+      })
       if (!ok) return
     }
     const p = chunkDocument(rawText, { targetChars: unfinished.chunkSize })
     if (p.length !== unfinished.totalChunks) {
-      alert(`⚠ 重新切块得到 ${p.length} 块，与原任务的 ${unfinished.totalChunks} 块不一致，无法续跑。\n建议：「清理」该任务后重新开始解析。`)
+      toast.error(`重新切块得到 ${p.length} 块，与原任务的 ${unfinished.totalChunks} 块不一致，无法续跑。建议清理该任务后重新开始解析。`)
       return
     }
     registerChunkTexts(unfinished.id, p.map(c => ({ index: c.index, text: c.text })))
@@ -403,7 +432,7 @@ export default function ImportDocPanel({ project, onNavigate }: Props) {
   const handleRetryFailed = async () => {
     if (!reportSession?.id) return
     if (!hasChunkTexts(reportSession.id)) {
-      alert('⚠ 原文已从内存清除，请重新上传同一文件后才能重试失败块。')
+      toast.error('原文已从内存清除，请重新上传同一文件后才能重试失败块。')
       return
     }
     setReportSession(null)
@@ -420,7 +449,13 @@ export default function ImportDocPanel({ project, onNavigate }: Props) {
   }
   const handleDiscardSession = async () => {
     if (!reportSession?.id) return
-    if (!confirm('确认清理本次会话记录？已入库的解析数据不会被删除。')) return
+    const ok = await dialog.confirm({
+      title: '清理本次会话记录？',
+      message: '已入库的解析数据不会被删除。',
+      confirmText: '清理',
+      tone: 'danger',
+    })
+    if (!ok) return
     clearChunkTexts(reportSession.id)
     await useImportSessionStore.getState().deleteBlob(reportSession.id).catch(() => {})
     await useImportSessionStore.getState().deleteSession(reportSession.id)
@@ -444,7 +479,7 @@ export default function ImportDocPanel({ project, onNavigate }: Props) {
             {isRunning && (
               <button
                 onClick={pausePipeline}
-                className="flex items-center gap-1 px-2 py-1 text-xs text-warn hover:bg-warn/10 rounded"
+                className="flex items-center gap-1 px-2 py-1 text-xs text-warning hover:bg-warning/10 rounded"
               >
                 <PauseCircle className="w-3.5 h-3.5" /> 暂停
               </button>
@@ -459,10 +494,14 @@ export default function ImportDocPanel({ project, onNavigate }: Props) {
             )}
             {(isRunning || isPaused) && (
               <button
-                onClick={() => {
-                  if (confirm('确认取消本次任务？已入库的解析数据不会被删除。')) {
-                    cancelPipeline()
-                  }
+                onClick={async () => {
+                  const ok = await dialog.confirm({
+                    title: '取消本次任务？',
+                    message: '已入库的解析数据不会被删除。',
+                    confirmText: '取消任务',
+                    tone: 'danger',
+                  })
+                  if (ok) cancelPipeline()
                 }}
                 className="flex items-center gap-1 px-2 py-1 text-xs text-error hover:bg-error/10 rounded"
               >
@@ -514,7 +553,13 @@ export default function ImportDocPanel({ project, onNavigate }: Props) {
           onResumeWithUploaded={handleResumeWithUploaded}
           onShowDetail={() => setReportSession(unfinished)}
           onDiscard={async () => {
-            if (!confirm('确认放弃这个未完成任务？已入库数据不会被删除。')) return
+            const ok = await dialog.confirm({
+              title: '放弃这个未完成任务？',
+              message: '已入库数据不会被删除。',
+              confirmText: '放弃任务',
+              tone: 'danger',
+            })
+            if (!ok) return
             await useImportSessionStore.getState().deleteSession(unfinished.id!)
             await useImportSessionStore.getState().deleteBlob(unfinished.id!).catch(() => {})
             clearChunkTexts(unfinished.id!)
@@ -531,9 +576,13 @@ export default function ImportDocPanel({ project, onNavigate }: Props) {
             📦 检测到已解析《{reusable.filename}》（{reusable.totalChars.toLocaleString()} 字 · {reusable.totalChunks} 块）
           </div>
           <div className="text-text-muted mb-2 leading-relaxed">
-            无需重新上传或解析，可直接复用这份解析做「项目参考」13 维作品分析{!hasChunkTexts(reusable.id!) && '（原文已不在内存，深层将退回浅层；如需深层请重新上传）'}：
+            无需重新上传或解析（不再花 AI）。可<strong className="text-accent">直接灌进当前项目设定库</strong>（世界观/角色/大纲一键入库，不用一个个手填），或存为「项目参考」做 13 维分析{!hasChunkTexts(reusable.id!) && '（原文已不在内存，深层将退回浅层；如需深层请重新上传）'}：
           </div>
           <div className="flex flex-wrap gap-2">
+            <button disabled={applyingReuse} onClick={handleReuseToProject}
+              className="px-3 py-1.5 rounded bg-accent text-white hover:bg-accent/90 disabled:opacity-50 font-medium">
+              📥 灌进当前项目设定库
+            </button>
             <button disabled={applyingReuse} onClick={() => handleReuseToReference('quick')}
               className="px-3 py-1.5 rounded bg-purple-500/80 text-white hover:bg-purple-500 disabled:opacity-50">
               ♻️ 应用到 项目参考 · 浅层（免费）
@@ -587,14 +636,14 @@ export default function ImportDocPanel({ project, onNavigate }: Props) {
           {(phase === 'done' || phase === 'failed') && (
             <div className="bg-bg-surface border border-border rounded-xl p-4 space-y-3">
               {status.failedChunks > 0 && (
-                <div className="bg-warn/10 border border-warn/30 rounded-lg p-3 flex items-center justify-between gap-3">
-                  <div className="text-sm text-warn flex items-center gap-1.5">
+                <div className="bg-warning/10 border border-warning/30 rounded-lg p-3 flex items-center justify-between gap-3">
+                  <div className="text-sm text-warning flex items-center gap-1.5">
                     <AlertTriangle className="w-4 h-4 shrink-0" />
                     <span>{status.failedChunks} 个块解析失败，可重新尝试</span>
                   </div>
                   <button
                     onClick={handleRetryFailed}
-                    className="flex items-center gap-1.5 px-4 py-2 bg-warn text-white text-sm rounded hover:bg-warn/90 shrink-0"
+                    className="flex items-center gap-1.5 px-4 py-2 bg-warning text-white text-sm rounded hover:bg-warning/90 shrink-0"
                   >
                     <RotateCcw className="w-4 h-4" /> 重试失败块
                   </button>

@@ -4,6 +4,13 @@ import { KEYWORD_CATEGORY_LABELS } from '../types/history'
 import { DIMENSION_LABELS, ANALYSIS_DIMENSIONS } from '../types/reference'
 import { loadContextMemo } from '../export/context-snapshot'
 import { db } from '../db/schema'
+import {
+  MORAL_AXIS_LABELS,
+  normalizeCharacterAxes,
+  ORDER_AXIS_LABELS,
+  ROLE_WEIGHT_LABELS,
+} from '../character/character-axes'
+import { CHARACTER_DIMENSIONS } from '../character/character-dimensions'
 
 /** 获取已缓存的上下文快照（如果有） */
 export function getContextMemo(projectId: number): string {
@@ -63,36 +70,38 @@ function formatNaturalResources(nr: Worldview['naturalResources']): string {
  */
 export function formatWorldviewBlock(wv: Worldview | null): string {
   if (!wv) return ''
+  // 放开字段级硬截断:核心设定完整注入,不再每字段砍成 150-300 字。
+  // 每个上下文源仍有 token 软上限(assembleContext 的 capBySourceBudget),真超模型窗口才软裁。
   const d = wv.divineDesign
   const divine = d?.hasDivinity
-    ? `神明设定：${[d.divineRank, d.divineNames, d.divineRules].filter(Boolean).join('；').slice(0, 200)}`
+    ? `神明设定：${[d.divineRank, d.divineNames, d.divineRules].filter(Boolean).join('；')}`
     : ''
   const v3 = [
-    wv.summary && `摘要：${wv.summary.slice(0, 300)}`,
-    wv.worldOrigin && `世界来源：${wv.worldOrigin.slice(0, 300)}`,
-    wv.powerHierarchy && `力量体系：${wv.powerHierarchy.slice(0, 200)}`,
+    wv.summary && `摘要：${wv.summary}`,
+    wv.worldOrigin && `世界来源：${wv.worldOrigin}`,
+    wv.powerHierarchy && `力量体系：${wv.powerHierarchy}`,
     divine,
-    wv.worldStructure && `世界结构：${wv.worldStructure.slice(0, 150)}`,
-    wv.worldDimensions && `世界尺寸：${wv.worldDimensions.slice(0, 100)}`,
-    wv.continentLayout && `地貌分布：${wv.continentLayout.slice(0, 200)}`,
-    wv.regionDimensions && `重镇/区域分布：${wv.regionDimensions.slice(0, 120)}`,
-    wv.mountainsRivers && `山川河流：${wv.mountainsRivers.slice(0, 150)}`,
-    wv.climateByRegion && `气候环境：${wv.climateByRegion.slice(0, 120)}`,
-    wv.historyLine && `世界历史：${wv.historyLine.slice(0, 200)}`,
-    wv.worldEvents && `世界大事记：${wv.worldEvents.slice(0, 200)}`,
-    wv.naturalResourceOverview && `自然资源：${wv.naturalResourceOverview.slice(0, 150)}`,
+    wv.worldStructure && `世界结构：${wv.worldStructure}`,
+    wv.worldDimensions && `世界尺寸：${wv.worldDimensions}`,
+    wv.continentLayout && `地貌分布：${wv.continentLayout}`,
+    wv.regionDimensions && `重镇/区域分布：${wv.regionDimensions}`,
+    wv.mountainsRivers && `山川河流：${wv.mountainsRivers}`,
+    wv.climateByRegion && `气候环境：${wv.climateByRegion}`,
+    wv.historyLine && `世界历史：${wv.historyLine}`,
+    wv.worldEvents && `世界大事记：${wv.worldEvents}`,
+    wv.naturalResourceOverview && `自然资源：${wv.naturalResourceOverview}`,
     formatNaturalResources(wv.naturalResources),
-    wv.races && `种族民族：${wv.races.slice(0, 150)}`,
-    wv.factionLayout && `势力分布：${wv.factionLayout.slice(0, 200)}`,
-    wv.politicsEconomyCulture && `政经文化：${wv.politicsEconomyCulture.slice(0, 150)}`,
-    wv.internalConflicts && `矛盾冲突：${wv.internalConflicts.slice(0, 150)}`,
-    wv.itemDesign && `道具设计：${wv.itemDesign.slice(0, 150)}`,
+    wv.races && `种族民族：${wv.races}`,
+    wv.factionLayout && `势力分布：${wv.factionLayout}`,
+    wv.politicsEconomyCulture && `政经文化：${wv.politicsEconomyCulture}`,
+    wv.internalConflicts && `矛盾冲突：${wv.internalConflicts}`,
+    wv.itemDesign && `道具设计：${wv.itemDesign}`,
   ].filter(Boolean)
   if (v3.length) return `【世界观】\n${v3.join('\n')}`
   const v2 = [
-    wv.geography && `地理：${wv.geography.slice(0, 200)}`,
-    wv.society && `社会：${wv.society.slice(0, 200)}`,
-    wv.rules && `规则：${wv.rules.slice(0, 200)}`,
+    wv.geography && `地理：${wv.geography}`,
+    wv.society && `社会：${wv.society}`,
+    wv.rules && `规则：${wv.rules}`,
   ].filter(Boolean)
   return v2.length ? `【世界观】\n${v2.join('\n')}` : ''
 }
@@ -105,8 +114,8 @@ export function formatStoryCoreBlock(sc: StoryCore | null): string {
     sc.theme && `主题：${sc.theme}`,
     sc.centralConflict && `核心冲突：${sc.centralConflict}`,
     sc.plotPattern && `情节模式：${sc.plotPattern}`,
-    (sc.mainPlot || sc.storyLines) && `主线：${(sc.mainPlot || sc.storyLines).slice(0, 250)}`,
-    sc.subPlots && `复线：${sc.subPlots.slice(0, 200)}`,
+    (sc.mainPlot || sc.storyLines) && `主线：${sc.mainPlot || sc.storyLines}`,
+    sc.subPlots && `复线：${sc.subPlots}`,
   ].filter(Boolean)
   return parts.length ? `【故事核心】\n${parts.join('\n')}` : ''
 }
@@ -115,16 +124,16 @@ export function formatStoryCoreBlock(sc: StoryCore | null): string {
 export function formatPowerSystemBlock(ps: PowerSystem | null): string {
   if (!ps?.name && !ps?.description && !ps?.levels) return ''
   const parts: string[] = []
-  if (ps.name) parts.push(`${ps.name}：${ps.description?.slice(0, 200) || ''}`)
-  else if (ps.description) parts.push(ps.description.slice(0, 200))
+  if (ps.name) parts.push(`${ps.name}：${ps.description || ''}`)
+  else if (ps.description) parts.push(ps.description)
   try {
     const levels = JSON.parse(ps.levels || '[]')
     if (Array.isArray(levels) && levels.length) {
       const names = levels.map((l: { name?: string } | string) => typeof l === 'string' ? l : (l.name || '')).filter(Boolean)
-      if (names.length) parts.push(`等级阶梯：${names.join(' → ').slice(0, 250)}`)
+      if (names.length) parts.push(`等级阶梯：${names.join(' → ')}`)
     }
   } catch { /* ignore */ }
-  if (ps.rules) parts.push(`规则：${ps.rules.slice(0, 150)}`)
+  if (ps.rules) parts.push(`规则：${ps.rules}`)
   return parts.length ? `【力量体系】\n${parts.join('\n')}` : ''
 }
 
@@ -172,38 +181,45 @@ export function buildWorldContext(wv: Worldview | null, sc: StoryCore | null, ps
 /**
  * 构建角色上下文（分权重三层输出）
  *
- * - 核心角色（主角/反派）：完整信息（描述+性格+背景+动机+能力）
- * - 重要配角（supporting）：一句话描述+关系
- * - 其他（minor/npc/extra）：仅名字和定位
+ * - 主要角色：完整信息（描述+性格+背景+动机+能力）
+ * - 次要角色：一句话描述+关系
+ * - NPC/路人：仅名字、戏份与九宫格阵营
  */
 export function buildCharacterContext(characters: Character[]): string {
   if (!characters.length) return ''
+  const normalizedCharacters = characters.map(character => ({
+    ...character,
+    ...normalizeCharacterAxes(character as unknown as Record<string, unknown>),
+  })) as Character[]
 
-  const core = characters.filter(c => c.role === 'protagonist' || c.role === 'antagonist')
-  const supporting = characters.filter(c => c.role === 'supporting')
-  const others = characters.filter(c => c.role !== 'protagonist' && c.role !== 'antagonist' && c.role !== 'supporting')
+  const core = normalizedCharacters.filter(c => c.roleWeight === 'main')
+  const supporting = normalizedCharacters.filter(c => c.roleWeight === 'secondary')
+  const others = normalizedCharacters.filter(c => c.roleWeight === 'npc' || c.roleWeight === 'extra')
+  const axes = (c: Character) =>
+    `${ROLE_WEIGHT_LABELS[c.roleWeight]} · ${ORDER_AXIS_LABELS[c.orderAxis]}${MORAL_AXIS_LABELS[c.moralAxis]}`
 
   const parts: string[] = []
 
   if (core.length) {
     parts.push('【核心角色（完整信息）】')
     for (const c of core) {
+      // 核心角色:从 CHARACTER_DIMENSIONS 单源遍历注入所有已填维度(含 A 扩充的 13 维),
+      // 让设计的 价值观/恐惧/目标/弱点… 真正进入生成上下文。relationships 非维度,单列保留。
+      // 放开字段硬截断,完整注入(源级 token 软上限仍兜底)。
       const details = [
-        `${c.name}（${getRoleLabel(c.role)}）`,
-        c.shortDescription ? `简介：${c.shortDescription}` : '',
-        c.appearance ? `外貌：${c.appearance.slice(0, 150)}` : '',
-        c.personality ? `性格：${c.personality.slice(0, 150)}` : '',
-        c.background ? `背景：${c.background.slice(0, 200)}` : '',
-        c.motivation ? `动机：${c.motivation.slice(0, 150)}` : '',
-        c.abilities ? `能力：${c.abilities.slice(0, 150)}` : '',
-        c.arc ? `成长弧线：${c.arc.slice(0, 150)}` : '',
+        `${c.name}（${axes(c)}）`,
+        ...CHARACTER_DIMENSIONS.map(d => {
+          const v = (c[d.key] as string | undefined)?.trim()
+          return v ? `${d.label}：${v}` : ''
+        }),
+        c.relationships?.trim() ? `人物关系：${c.relationships.trim()}` : '',
       ].filter(Boolean).join('；')
       parts.push(details)
     }
   }
 
   if (supporting.length) {
-    parts.push('【重要配角（一句话+关系）】')
+    parts.push('【次要角色（一句话+关系）】')
     for (const c of supporting) {
       parts.push(`${c.name}：${c.shortDescription || '（无描述）'}${c.relationships ? `，关系：${c.relationships.slice(0, 80)}` : ''}`)
     }
@@ -211,7 +227,7 @@ export function buildCharacterContext(characters: Character[]): string {
 
   if (others.length) {
     parts.push('【其他角色（仅名字）】')
-    parts.push(others.map(c => `${c.name}（${getRoleLabel(c.role)}）`).join('、'))
+    parts.push(others.map(c => `${c.name}（${axes(c)}）`).join('、'))
   }
 
   return parts.join('\n')
@@ -219,27 +235,18 @@ export function buildCharacterContext(characters: Character[]): string {
 
 /**
  * Phase G2: 过滤活跃角色
- * 只保留在当前章节范围内活跃的角色（主角/反派始终保留）
+ * 只保留在当前章节范围内活跃的角色（主要角色始终保留）
  */
 export function filterActiveCharacters(characters: Character[], currentChapterId?: number): Character[] {
   if (!currentChapterId) return characters
   return characters.filter(c => {
-    // 主角和反派始终保留
-    if (c.role === 'protagonist' || c.role === 'antagonist') return true
+    if (c.roleWeight === 'main') return true
     // 如果设了退场章节且当前章节已过退场点，过滤掉
     if (c.exitChapterId && c.exitChapterId < currentChapterId) return false
     // 如果设了首次出场且当前章节还没到，过滤掉
     if (c.firstAppearChapterId && c.firstAppearChapterId > currentChapterId) return false
     return true
   })
-}
-
-function getRoleLabel(role: string): string {
-  const map: Record<string, string> = {
-    protagonist: '主角', antagonist: '反派',
-    supporting: '配角', minor: '次要',
-  }
-  return map[role] || role
 }
 
 /**
@@ -283,24 +290,6 @@ export async function buildRefAnalysisContext(refIds: number[]): Promise<string>
   return `【引用手法 — 请参考以下大师创作方法论来指导写作】\n\n${parts.join('\n\n')}\n\n【引用手法结束 — 请灵活运用上述方法论，不要生搬硬套】`
 }
 
-/**
- * Phase 19-d: 构建大师洞察上下文 —— 从 masterInsights 表读取洞察注入创作 prompt。
- */
-export async function buildMasterInsightContext(insightIds: number[]): Promise<string> {
-  if (!insightIds.length) return ''
-
-  const parts: string[] = []
-  for (const id of insightIds) {
-    const insight = await db.masterInsights.get(id)
-    if (!insight) continue
-    const bullets = insight.bulletPoints.map(b => `  - ${b}`).join('\n')
-    parts.push(`【${insight.title}】${insight.genre ? `（${insight.genre}）` : ''}\n${insight.description.slice(0, 500)}\n要点：\n${bullets}`)
-  }
-
-  if (!parts.length) return ''
-  return `【大师洞察 — 请参考以下创作方法论来指导写作】\n\n${parts.join('\n\n')}\n\n【大师洞察结束 — 请灵活运用，不要生搬硬套】`
-}
-
 /** 构建世界观各维度已有内容（用于 AI 生成时做参考） */
 // ── Phase 31.1: 历史模式上下文注入 ──────────────────────────────
 
@@ -310,15 +299,20 @@ export async function buildMasterInsightContext(insightIds: number[]): Promise<s
  * 从 DB 读取项目的历史事件和关键词，格式化为 AI 可用的上下文。
  * Token 预算控制：最多 2000 字（约上下文窗口的 10%）。
  */
-export async function buildHistoricalContext(projectId: number): Promise<string> {
+export async function buildHistoricalContext(projectId: number, worldGroupId?: number | null): Promise<string> {
   const MAX_CHARS = 2000
   const parts: string[] = []
   let charCount = 0
+  const project = await db.projects.get(projectId)
+  const filterWorldScope = <T extends { worldGroupId?: number | null }>(rows: T[]): T[] => {
+    if (!project?.enableMultiWorld) return rows
+    return rows.filter(row => row.worldGroupId == null || row.worldGroupId === worldGroupId)
+  }
 
   // 1. 历史时间线事件（按年份排序，取关键事件）
-  const events = await db.historicalTimelineEvents
+  const events = filterWorldScope(await db.historicalTimelineEvents
     .where('projectId').equals(projectId)
-    .sortBy('year')
+    .sortBy('year'))
 
   if (events.length > 0) {
     const eventLines: string[] = ['【历史时间线】']
@@ -335,9 +329,9 @@ export async function buildHistoricalContext(projectId: number): Promise<string>
   }
 
   // 2. 历史关键词（按分类分组）
-  const keywords = await db.historicalKeywords
+  const keywords = filterWorldScope(await db.historicalKeywords
     .where('projectId').equals(projectId)
-    .toArray()
+    .toArray())
 
   if (keywords.length > 0) {
     const byCategory = new Map<HistoricalKeywordCategory, HistoricalKeyword[]>()

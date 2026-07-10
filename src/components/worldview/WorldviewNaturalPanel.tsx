@@ -7,6 +7,7 @@ import CodexPanel from '../codex/CodexPanel'
 import CodexSearchBar from '../codex/CodexSearchBar'
 import { InlineTextarea } from '../shared/InlineEdit'
 import { useAIStream } from '../../hooks/useAIStream'
+import { createAISessionKey } from '../../stores/ai-generation-session'
 import { buildWorldviewPrompt } from '../../lib/ai/adapters/worldview-adapter'
 import { assembleContext } from '../../lib/registry/assemble-context'
 import AIStreamOutput from '../shared/AIStreamOutput'
@@ -134,7 +135,7 @@ export default function WorldviewNaturalPanel({ project }: Props) {
 
       <div className="flex flex-1 overflow-hidden">
         {/* ── 左侧边栏 ── */}
-        <nav className="w-48 flex-shrink-0 border-r border-border bg-bg-surface/50 overflow-y-auto">
+        <nav className="w-max min-w-32 max-w-44 flex-shrink-0 border-r border-border bg-bg-surface/50 overflow-y-auto">
           {[...FIELDS.map(f => ({ key: f.key, emoji: f.emoji, label: f.label })),
             { key: 'naturalResources' as const, emoji: '🌿', label: '自然资源' },
           ].map(f => {
@@ -179,7 +180,12 @@ export default function WorldviewNaturalPanel({ project }: Props) {
                 <div className="mt-6">
                   <h3 className="text-sm font-semibold text-text-primary mb-1">📚 {f.label} · 具体词条</h3>
                   <p className="text-xs text-text-muted mb-3">在上面写完整体「全貌」后，这里把「{f.label}」逐条细化登记，可自定义字段、打重要度星级，并进入 AI 生成上下文。</p>
-                  <CodexPanel project={project} fixedCategoryKeys={NATURAL_CODEX_KEYS[f.key]} embedded />
+                  <CodexPanel
+                    project={project}
+                    fixedCategoryKeys={NATURAL_CODEX_KEYS[f.key]}
+                    extractionSourceText={values[f.key] || ''}
+                    embedded
+                  />
                 </div>
               )}
             </div>
@@ -201,7 +207,18 @@ export default function WorldviewNaturalPanel({ project }: Props) {
             <div>
               <h3 className="text-sm font-semibold text-text-primary mb-1">📚 自然物产 · 具体词条</h3>
               <p className="text-xs text-text-muted mb-2">矿物灵材 / 灵植草药 / 灵兽异兽——逐条登记,可自定义字段、互相关联、打星,并进入 AI 生成上下文。</p>
-              <CodexPanel project={project} fixedCategoryKeys={['mineral', 'herb', 'beast']} embedded />
+              <CodexPanel
+                project={project}
+                fixedCategoryKeys={['mineral', 'herb', 'beast']}
+                extractionSourceText={[
+                  values.naturalResourceOverview,
+                  naturalResources.minerals,
+                  naturalResources.herbs,
+                  naturalResources.rareCreatures,
+                  naturalResources.others,
+                ].filter(Boolean).join('\n\n')}
+                embedded
+              />
             </div>
             {/* 旧版自然资源(纯文本)——保留兼容 */}
             <details className="border-t border-border/60 pt-3">
@@ -236,8 +253,12 @@ function SimpleFieldEditor({ field, value, onChange, project, contextSummary, on
   const [systemOverride, setSystemOverride] = useState<string | null>(null)
   const [userOverride, setUserOverride] = useState<string | null>(null)
   const [mode, setMode] = useState<FieldGenerationMode>('expand')
-  const ai = useAIStream()
   const activeGroupId = useWorldGroupStore(s => s.activeGroupId)
+  const ai = useAIStream(createAISessionKey(
+    project.id!,
+    'worldview.dimension',
+    `${activeGroupId ?? 'global'}:${field.key}`,
+  ))
 
   useEffect(() => {
     onStreamingChange(ai.isStreaming)
@@ -258,7 +279,7 @@ function SimpleFieldEditor({ field, value, onChange, project, contextSummary, on
     const messages = buildWorldviewPrompt(
       field.label, project.name, project.genre || '', contextSummary, hint, opts, value, mode,
     )
-    ai.start(messages)
+    ai.start(messages, undefined, { category: 'worldview.dimension', projectId: project.id! })
   }
 
   return (

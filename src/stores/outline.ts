@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import { db } from '../lib/db/schema'
 import type { OutlineNode } from '../lib/types'
+import { normalizeOutlineNode } from '../lib/outline/normalize'
 import { useChapterStore } from './chapter'
 
 interface OutlineStore {
@@ -13,6 +14,14 @@ interface OutlineStore {
   deleteNode: (id: number) => Promise<void>
   /** 批量添加节点（AI 生成大纲后） */
   addNodes: (nodes: Omit<OutlineNode, 'id' | 'createdAt' | 'updatedAt'>[]) => Promise<void>
+  /** 同级重排：按给定 id 顺序把 order 重写为 0..n-1（拖动排序 / 任意位置插入用，FB-2） */
+  reorderNodes: (orderedIds: number[]) => Promise<void>
+  /** 在某同级位置插入新节点（任意位置插入，FB-2）。siblingIds 为当前同级顺序，index 为插入位。返回新 id */
+  insertNodeAt: (
+    node: Omit<OutlineNode, 'id' | 'createdAt' | 'updatedAt'>,
+    siblingIds: number[],
+    index: number,
+  ) => Promise<number>
 }
 
 const now = () => Date.now()
@@ -26,21 +35,44 @@ export const useOutlineStore = create<OutlineStore>((set, get) => ({
     const nodes = await db.outlineNodes
       .where('projectId').equals(projectId)
       .sortBy('order')
-    set({ nodes, loading: false })
+    set({ nodes: nodes.map(normalizeOutlineNode), loading: false })
   },
 
   addNode: async (node) => {
-    const newNode: OutlineNode = { ...node, createdAt: now(), updatedAt: now() }
+    const newNode: OutlineNode = normalizeOutlineNode({ ...node, createdAt: now(), updatedAt: now() } as OutlineNode)
     const id = await db.outlineNodes.add(newNode) as number
     set({ nodes: [...get().nodes, { ...newNode, id }] })
     return id
   },
 
   updateNode: async (id, data) => {
-    await db.outlineNodes.update(id, { ...data, updatedAt: now() })
+    const ts = now()
+    const before = get().nodes.find(n => n.id === id) ?? await db.outlineNodes.get(id)
+    await db.outlineNodes.update(id, { ...data, updatedAt: ts })
+    if (
+      before?.type === 'chapter'
+      && Object.prototype.hasOwnProperty.call(data, 'title')
+      && typeof data.title === 'string'
+    ) {
+      const chapterIds = (await db.chapters.where('outlineNodeId').equals(id).primaryKeys()) as number[]
+      if (chapterIds.length) {
+        await db.chapters.bulkUpdate(chapterIds.map(chapterId => ({
+          key: chapterId,
+          changes: { title: data.title, updatedAt: ts },
+        })))
+        useChapterStore.setState(state => ({
+          chapters: state.chapters.map(chapter =>
+            chapter.outlineNodeId === id ? { ...chapter, title: data.title!, updatedAt: ts } : chapter,
+          ),
+          currentChapter: state.currentChapter?.outlineNodeId === id
+            ? { ...state.currentChapter, title: data.title!, updatedAt: ts }
+            : state.currentChapter,
+        }))
+      }
+    }
     set({
       nodes: get().nodes.map(n =>
-        n.id === id ? { ...n, ...data, updatedAt: now() } : n
+        n.id === id ? normalizeOutlineNode({ ...n, ...data, updatedAt: ts }) : n
       ),
     })
   },
@@ -63,9 +95,36 @@ export const useOutlineStore = create<OutlineStore>((set, get) => ({
   },
 
   addNodes: async (nodes) => {
-    const newNodes = nodes.map(n => ({ ...n, createdAt: now(), updatedAt: now() }))
+    const newNodes = nodes.map(n => normalizeOutlineNode({ ...n, createdAt: now(), updatedAt: now() } as OutlineNode))
     const ids = await db.outlineNodes.bulkAdd(newNodes, { allKeys: true }) as number[]
     const withIds = newNodes.map((n, i) => ({ ...n, id: ids[i] }))
     set({ nodes: [...get().nodes, ...withIds] })
+  },
+
+  reorderNodes: async (orderedIds) => {
+    const ts = now()
+    const orderById = new Map(orderedIds.map((id, i) => [id, i]))
+    await db.transaction('rw', db.outlineNodes, async () => {
+      for (const [id, order] of orderById) {
+        await db.outlineNodes.update(id, { order, updatedAt: ts })
+      }
+    })
+    set({
+      nodes: get().nodes.map(n =>
+        n.id != null && orderById.has(n.id)
+          ? normalizeOutlineNode({ ...n, order: orderById.get(n.id)!, updatedAt: ts })
+          : n,
+      ),
+    })
+  },
+
+  insertNodeAt: async (node, siblingIds, index) => {
+    // 先落库（order 临时给末尾），再把它挪到目标位并重排同级，保证 order 连续无重复
+    const newId = await get().addNode({ ...node, order: siblingIds.length })
+    const clamped = Math.max(0, Math.min(index, siblingIds.length))
+    const next = [...siblingIds]
+    next.splice(clamped, 0, newId)
+    await get().reorderNodes(next)
+    return newId
   },
 }))

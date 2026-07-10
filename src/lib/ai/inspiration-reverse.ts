@@ -4,9 +4,15 @@
  * 用户写碎片灵感 → AI 反向生成世界观草稿、故事核心、初始角色卡
  */
 
-import type { ChatMessage } from '../types'
+import type {
+  ChatMessage,
+  CharacterMoralAxis,
+  CharacterOrderAxis,
+  CharacterRoleWeight,
+} from '../types'
 import { usePromptStore } from '../../stores/prompt'
 import { renderPrompt } from './prompt-engine'
+import { extractJSON } from './adapters/import-adapter'
 
 // ── 类型 ────────────────────────────────────────────────────────────────
 
@@ -30,7 +36,9 @@ export interface ReverseStoryCore {
 
 export interface ReverseCharacter {
   name: string
-  role: 'protagonist' | 'antagonist' | 'supporting'
+  roleWeight: CharacterRoleWeight
+  moralAxis: CharacterMoralAxis
+  orderAxis: CharacterOrderAxis
   shortDescription: string
   personality: string
   background: string
@@ -76,6 +84,23 @@ export interface ReverseMultiWorldResult {
 }
 
 const VALID_WG_TYPES: WorldGroupType[] = ['primary', 'traversal', 'instance', 'parallel', 'ascension', 'custom']
+const VALID_WEIGHTS: CharacterRoleWeight[] = ['main', 'secondary', 'npc', 'extra']
+const VALID_MORAL: CharacterMoralAxis[] = ['good', 'neutral', 'evil']
+const VALID_ORDER: CharacterOrderAxis[] = ['lawful', 'neutral', 'chaotic']
+
+function parseAxes(c: Record<string, unknown>): Pick<ReverseCharacter, 'roleWeight' | 'moralAxis' | 'orderAxis'> {
+  return {
+    roleWeight: VALID_WEIGHTS.includes(c.roleWeight as CharacterRoleWeight)
+      ? c.roleWeight as CharacterRoleWeight
+      : 'main',
+    moralAxis: VALID_MORAL.includes(c.moralAxis as CharacterMoralAxis)
+      ? c.moralAxis as CharacterMoralAxis
+      : 'neutral',
+    orderAxis: VALID_ORDER.includes(c.orderAxis as CharacterOrderAxis)
+      ? c.orderAxis as CharacterOrderAxis
+      : 'neutral',
+  }
+}
 
 export function buildInspirationReverseMultiWorldPrompt(
   projectName: string,
@@ -94,10 +119,10 @@ export function buildInspirationReverseMultiWorldPrompt(
 }
 
 export function parseReverseMultiWorldOutput(output: string): ReverseMultiWorldResult | null {
-  const jsonMatch = output.match(/```(?:json)?\s*\n?([\s\S]*?)```/)
-  const jsonStr = jsonMatch ? jsonMatch[1].trim() : output.trim()
   try {
-    const p = JSON.parse(jsonStr)
+    // 健壮提取：围栏 / 未闭合围栏 / 裸 { 起点 + 截断修复。避免模型带前后文（如"以下是结果："）时
+    // 第一遍解析失败、反推结果不显示，用户要重推或退出重进才出来（社区反馈）。
+    const p = extractJSON(output) as Record<string, any>  // eslint-disable-line @typescript-eslint/no-explicit-any
     const storyCore: ReverseStoryCore = {
       logline: String(p.storyCore?.logline || ''),
       theme: String(p.storyCore?.theme || ''),
@@ -123,7 +148,7 @@ export function parseReverseMultiWorldOutput(output: string): ReverseMultiWorldR
     const characters: ReverseCharacterMW[] = Array.isArray(p.characters)
       ? p.characters.map((c: Record<string, unknown>): ReverseCharacterMW => ({
           name: String(c.name || ''),
-          role: (['protagonist', 'antagonist', 'supporting'].includes(String(c.role)) ? c.role : 'supporting') as ReverseCharacter['role'],
+          ...parseAxes(c),
           shortDescription: String(c.shortDescription || ''),
           personality: String(c.personality || ''),
           background: String(c.background || ''),
@@ -161,11 +186,9 @@ export function buildInspirationReversePrompt(
 // ── 解析输出 ─────────────────────────────────────────────────────────────
 
 export function parseReverseOutput(output: string): ReverseResult | null {
-  const jsonMatch = output.match(/```(?:json)?\s*\n?([\s\S]*?)```/)
-  const jsonStr = jsonMatch ? jsonMatch[1].trim() : output.trim()
-
   try {
-    const parsed = JSON.parse(jsonStr)
+    // 健壮提取（同上）：模型带前后文/无围栏时也能取到 JSON，第一遍就出结果。
+    const parsed = extractJSON(output) as Record<string, any>  // eslint-disable-line @typescript-eslint/no-explicit-any
 
     const worldview: ReverseWorldview = {
       worldOrigin: String(parsed.worldview?.worldOrigin || ''),
@@ -188,9 +211,7 @@ export function parseReverseOutput(output: string): ReverseResult | null {
     const characters: ReverseCharacter[] = Array.isArray(parsed.characters)
       ? parsed.characters.map((c: Record<string, unknown>) => ({
           name: String(c.name || ''),
-          role: (['protagonist', 'antagonist', 'supporting'].includes(String(c.role))
-            ? c.role
-            : 'supporting') as ReverseCharacter['role'],
+          ...parseAxes(c),
           shortDescription: String(c.shortDescription || ''),
           personality: String(c.personality || ''),
           background: String(c.background || ''),

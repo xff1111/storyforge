@@ -7,7 +7,16 @@ export type CharacterRole =
   | 'npc'            // NPC（紧凑列表展示）
   | 'extra'          // 路人（表格行：姓名/出场时间/章节/作用/结局）
 
-/** 阵营 */
+/** 戏份权重（R1：与阵营正交） */
+export type CharacterRoleWeight = 'main' | 'secondary' | 'npc' | 'extra'
+
+/** 阵营九宫格：道德轴 */
+export type CharacterMoralAxis = 'good' | 'neutral' | 'evil'
+
+/** 阵营九宫格：秩序轴 */
+export type CharacterOrderAxis = 'lawful' | 'neutral' | 'chaotic'
+
+/** 旧二值阵营，仅为旧数据兼容保留。新代码使用 moralAxis/orderAxis。 */
 export type CharacterAlignment = 'good' | 'evil'
 
 /** 角色 */
@@ -15,8 +24,12 @@ export interface Character {
   id?: number
   projectId: number
   name: string
+  /** 兼容字段：始终由 roleWeight + moralAxis 派生，不再作为独立输入。 */
   role: CharacterRole
-  /** 阵营：正派/反派 */
+  roleWeight: CharacterRoleWeight
+  moralAxis: CharacterMoralAxis
+  orderAxis: CharacterOrderAxis
+  /** @deprecated 旧二值阵营。新代码使用 moralAxis/orderAxis。 */
   alignment?: CharacterAlignment
   shortDescription: string   // 一句话简介
   appearance: string         // 外貌
@@ -26,6 +39,21 @@ export interface Character {
   abilities: string          // 能力
   relationships: string      // 关系描述（JSON string）
   arc: string                // 角色弧光/成长线
+
+  // ── 扩展角色维度（可选；空=未填。注册于 FIELD_REGISTRY，由 CHARACTER_DIMENSIONS 描述符驱动呈现/生成）──
+  identity?: string          // 身份/职业/势力归属
+  profile?: string           // 年龄·性别·种族
+  values?: string            // 价值观/信念
+  strengths?: string         // 优点/长处
+  weaknesses?: string        // 缺点/性格弱点
+  fears?: string             // 恐惧/软肋/逆鳞
+  goals?: string             // 目标（短期+长期）
+  innerConflict?: string     // 核心矛盾/内心冲突
+  keyEvents?: string         // 关键经历/转折事件
+  powerLevel?: string        // 实力定位/境界等级
+  speechStyle?: string       // 语言风格/口头禅
+  habits?: string            // 习惯/小动作/癖好
+  signatureItem?: string     // 标志性物品/形象符号
 
   // ── v3 §2.1 新字段：路人卡片用 ───────────────────────────────
   /** 常驻地点 / 起始地点 */

@@ -6,6 +6,7 @@ import { useAIConfigStore } from '../../stores/ai-config'
 import WorldGroupSwitcher from '../world-group/WorldGroupSwitcher'
 import { InlineTextarea } from '../shared/InlineEdit'
 import { useAIStream } from '../../hooks/useAIStream'
+import { createAISessionKey } from '../../stores/ai-generation-session'
 import { buildWorldviewPrompt } from '../../lib/ai/adapters/worldview-adapter'
 import { assembleContext } from '../../lib/registry/assemble-context'
 import { streamChat } from '../../lib/ai/client'
@@ -140,7 +141,7 @@ export default function WorldviewOriginPanel({ project }: Props) {
 
       <div className="flex gap-4">
         {/* ── 左侧边栏 ── */}
-        <div className="w-44 shrink-0 space-y-0.5 pt-1">
+        <div className="w-fit min-w-32 max-w-44 shrink-0 space-y-0.5 pt-1">
           {FIELDS.map(f => {
             const isActive = active === f.key
             const isFieldStreaming = streamingKeys.has(f.key)
@@ -193,7 +194,12 @@ export default function WorldviewOriginPanel({ project }: Props) {
             <div className="mt-6">
               <h3 className="text-sm font-semibold text-text-primary mb-1">📚 力量层级 · 具体词条</h3>
               <p className="text-xs text-text-muted mb-3">在上面写完力量体系「全貌」后，这里把各等级/层级逐条登记，可自定义字段、打重要度星级，并进入 AI 生成上下文。</p>
-              <CodexPanel project={project} fixedCategoryKeys={['originPower']} embedded />
+              <CodexPanel
+                project={project}
+                fixedCategoryKeys={['originPower']}
+                extractionSourceText={powerHierarchy}
+                embedded
+              />
             </div>
           </div>
 
@@ -202,7 +208,10 @@ export default function WorldviewOriginPanel({ project }: Props) {
             <DivineFieldEditor
               field={FIELDS[2]}
               divineDesign={divineDesign}
-              onDivineChange={(next) => { setDivineDesign(next); save({ divineDesign: next }) }}
+              onDivineChange={async (next) => {
+                setDivineDesign(next)
+                await save({ divineDesign: next })
+              }}
               project={project}
               contextSummary={buildCtx('divine')}
               onStreamingChange={streaming => handleStreamingChange('divine', streaming)}
@@ -210,7 +219,16 @@ export default function WorldviewOriginPanel({ project }: Props) {
             <div className="mt-6">
               <h3 className="text-sm font-semibold text-text-primary mb-1">📚 神明信仰 · 具体词条</h3>
               <p className="text-xs text-text-muted mb-3">在上面写完信仰体系「全貌」后，这里把各神明/信仰逐条登记，可自定义字段、打重要度星级，并进入 AI 生成上下文。</p>
-              <CodexPanel project={project} fixedCategoryKeys={['originDeity']} embedded />
+              <CodexPanel
+                project={project}
+                fixedCategoryKeys={['originDeity']}
+                extractionSourceText={[
+                  divineDesign.divineNames,
+                  divineDesign.divineRank,
+                  divineDesign.divineRules,
+                ].filter(Boolean).join('\n\n')}
+                embedded
+              />
             </div>
           </div>
         </div>
@@ -236,8 +254,12 @@ function TextFieldEditor({
   const [systemOverride, setSystemOverride] = useState<string | null>(null)
   const [userOverride, setUserOverride] = useState<string | null>(null)
   const [mode, setMode] = useState<FieldGenerationMode>('expand')
-  const ai = useAIStream()
   const activeGroupId = useWorldGroupStore(s => s.activeGroupId)
+  const ai = useAIStream(createAISessionKey(
+    project.id!,
+    'worldview.dimension',
+    `${activeGroupId ?? 'global'}:${field.key}`,
+  ))
 
   useEffect(() => {
     onStreamingChange(ai.isStreaming)
@@ -262,7 +284,7 @@ function TextFieldEditor({
     const messages = buildWorldviewPrompt(
       field.label, project.name, project.genre || '', fullContext, hint, opts, value, mode,
     )
-    ai.start(messages)
+    ai.start(messages, undefined, { category: 'worldview.dimension', projectId: project.id! })
   }
 
   return (
@@ -313,7 +335,7 @@ function DivineFieldEditor({
 }: {
   field: typeof FIELDS[number]
   divineDesign: DivineDesign
-  onDivineChange: (next: DivineDesign) => void
+  onDivineChange: (next: DivineDesign) => Promise<void>
   project: Project
   contextSummary: string
   onStreamingChange: (streaming: boolean) => void
@@ -323,8 +345,12 @@ function DivineFieldEditor({
   const [systemOverride, setSystemOverride] = useState<string | null>(null)
   const [userOverride, setUserOverride] = useState<string | null>(null)
   const [mode, setMode] = useState<FieldGenerationMode>('expand')
-  const ai = useAIStream()
   const activeGroupId = useWorldGroupStore(s => s.activeGroupId)
+  const ai = useAIStream(createAISessionKey(
+    project.id!,
+    'worldview.dimension',
+    `${activeGroupId ?? 'global'}:${field.key}`,
+  ))
 
   useEffect(() => {
     onStreamingChange(ai.isStreaming)
@@ -357,7 +383,7 @@ function DivineFieldEditor({
       ].filter(Boolean).join('\n'),
       mode,
     )
-    ai.start(messages)
+    ai.start(messages, undefined, { category: 'worldview.divine', projectId: project.id! })
   }
 
   const [splitting, setSplitting] = useState(false)
@@ -381,14 +407,14 @@ function DivineFieldEditor({
       ]
       const config = useAIConfigStore.getState().config
       let accumulated = ''
-      const stream = streamChat(splitMessages, config, new AbortController().signal, {})
+      const stream = streamChat(splitMessages, config, new AbortController().signal, {}, { category: 'worldview.divine.split', projectId: project.id! })
       for await (const chunk of stream) {
         accumulated += chunk
       }
       // 解析 JSON
       const cleaned = accumulated.replace(/^```(?:json)?\s*\n?/i, '').replace(/\n?\s*```\s*$/i, '').trim()
       const parsed = JSON.parse(cleaned)
-      onDivineChange({
+      await onDivineChange({
         hasDivinity: true,
         divineRank: String(parsed.divineRank || '').trim() || text,
         divineNames: String(parsed.divineNames || '').trim(),
@@ -396,7 +422,7 @@ function DivineFieldEditor({
       })
     } catch {
       // AI 拆分失败时，全部内容放入 divineRank，不丢失数据
-      onDivineChange({
+      await onDivineChange({
         hasDivinity: true,
         divineRank: text,
         divineNames: '',

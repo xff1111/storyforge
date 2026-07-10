@@ -4,6 +4,7 @@ import { useGeographyStore } from '../../stores/project-singletons'
 import { useWorldGroupStore } from '../../stores/world-group'
 import WorldGroupSwitcher from '../world-group/WorldGroupSwitcher'
 import { useAIStream } from '../../hooks/useAIStream'
+import { createAISessionKey } from '../../stores/ai-generation-session'
 import { buildConceptMapPrompt, buildImageMapPrompt } from '../../lib/ai/adapters/geography-adapter'
 import type { Project, Location, LocationType } from '../../lib/types'
 import { nanoid } from '../../lib/utils/id'
@@ -49,7 +50,11 @@ export default function GeographyPanel({ project }: Props) {
   const [svgContent, setSvgContent] = useState<string>('')
   const [imagePrompt, setImagePrompt] = useState<string>('')
   const [copied, setCopied] = useState(false)
-  const ai = useAIStream()
+  const ai = useAIStream(createAISessionKey(
+    project.id!,
+    'geography.concept-map',
+    project.enableMultiWorld ? activeGroupId ?? 'global' : 'project',
+  ))
 
   useEffect(() => {
     loadAll(project.id!, project.enableMultiWorld ? activeGroupId : null)
@@ -65,6 +70,18 @@ export default function GeographyPanel({ project }: Props) {
       }
     }
   }, [geography])
+
+  useEffect(() => {
+    if (ai.isStreaming || !ai.output || svgContent) return
+    const svg = ai.output
+      .replace(/^```(?:svg|xml)?\n?/i, '')
+      .replace(/\n?```$/i, '')
+      .trim()
+    if (svg.includes('<svg')) {
+      setSvgContent(sanitizeSvg(svg))
+      setView('aimap')
+    }
+  }, [ai.isStreaming, ai.output, svgContent])
 
   const saveLocations = useCallback(async (newLocations: Location[]) => {
     setLocations(newLocations)
@@ -107,7 +124,7 @@ export default function GeographyPanel({ project }: Props) {
     setSvgContent('')
     setView('aimap')
     const messages = buildConceptMapPrompt(overview, locations)
-    const result = await ai.start(messages)
+    const result = await ai.start(messages, undefined, { category: 'geography.concept-map', projectId: project.id! })
     // 提取 SVG 代码（去掉可能的 markdown code block）
     const svg = result
       .replace(/^```(?:svg|xml)?\n?/i, '')

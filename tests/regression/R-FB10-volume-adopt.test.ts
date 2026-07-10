@@ -12,6 +12,8 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { db } from '../../src/lib/db/schema'
 import { adopt } from '../../src/lib/registry/adopt'
+import { getTopLevelVolumes, isTopLevelVolumeNode } from '../../src/lib/outline/selectors'
+import { useOutlineStore } from '../../src/stores/outline'
 
 async function createProject(): Promise<number> {
   const now = Date.now()
@@ -53,6 +55,18 @@ describe('R-FB10 · 卷级大纲采纳写入', () => {
     expect(vol.parentId === null).toBe(true)
   })
 
+  it('左侧卷列表 selector 兼容历史坏数据 parentId 缺失,避免已写入卷被隐藏', () => {
+    const rows = [
+      { projectId: 1, parentId: null, type: 'volume', title: '第一卷', summary: '', order: 1, createdAt: 1, updatedAt: 1 },
+      { projectId: 1, type: 'volume', title: '旧数据卷', summary: '', order: 0, createdAt: 1, updatedAt: 1 },
+      { projectId: 1, parentId: 1, type: 'chapter', title: '第一章', summary: '', order: 0, createdAt: 1, updatedAt: 1 },
+    ] as any[]
+
+    expect(isTopLevelVolumeNode(rows[0])).toBe(true)
+    expect(isTopLevelVolumeNode(rows[1])).toBe(true)
+    expect(getTopLevelVolumes(rows).map(v => v.title)).toEqual(['旧数据卷', '第一卷'])
+  })
+
   it('同名卷再采纳:被 skip 且 written 为空、带可反馈的原因(不静默)', async () => {
     const pid = await createProject()
     await adoptVolume(pid, '第一卷 风起', 0)
@@ -74,5 +88,39 @@ describe('R-FB10 · 卷级大纲采纳写入', () => {
     expect(r1.written.length + r2.written.length + r3.written.length).toBe(3)
     const vols = (await db.outlineNodes.where('projectId').equals(pid).toArray()).filter(n => n.type === 'volume')
     expect(vols.length).toBe(3)
+  })
+
+  it('adopt 写入 outlineNodes 缺 summary 时使用注册表默认值，避免进入大纲页 trim 崩溃', async () => {
+    const pid = await createProject()
+    const r = await adopt({
+      projectId: pid,
+      target: 'outlineNodes',
+      mode: 'add',
+      data: { parentId: null, type: 'volume', title: '无摘要卷', order: 0 },
+    })
+    expect(r.written.length).toBe(1)
+    const row = await db.outlineNodes.get(r.written[0].id!)
+    expect(row?.summary).toBe('')
+    expect(typeof row?.summary).toBe('string')
+  })
+
+  it('store.loadAll 会治愈本地旧脏节点 summary 缺失，纯点击进入大纲不再读 undefined.trim', async () => {
+    const pid = await createProject()
+    const rawId = await db.outlineNodes.add({
+      projectId: pid,
+      parentId: null,
+      type: 'volume',
+      title: '旧脏数据卷',
+      order: 0,
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    } as any) as number
+
+    await useOutlineStore.getState().loadAll(pid)
+
+    const loaded = useOutlineStore.getState().nodes.find(node => node.id === rawId)
+    expect(loaded?.summary).toBe('')
+    expect(loaded?.summary.trim()).toBe('')
+    expect(loaded?.parentId).toBe(null)
   })
 })

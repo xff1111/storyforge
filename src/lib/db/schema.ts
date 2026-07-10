@@ -1,5 +1,7 @@
 import Dexie, { type Table } from 'dexie'
 import { migrateLegacyTablesToCodex } from '../migrations/legacy-to-codex-upgrade'
+import { migrateCharactersToAxes } from '../migrations/character-axes-upgrade'
+import { migrateStateCardsToTemporalFactCandidates } from '../migrations/state-cards-to-temporal-facts'
 import type {
   Project,
   Worldview,
@@ -23,12 +25,7 @@ import type {
   ImportLog,
   ImportFileBlob,
   PromptWorkflow,
-  MasterWork,
-  MasterChunkAnalysis,
-  MasterChapterBeat,
-  MasterStyleMetrics,
   Note,
-  MasterInsight,
   StateCard,
   EmotionBeatCard,
   WorldNode,
@@ -46,6 +43,9 @@ import type {
   CodexEntry,
 } from '../types'
 import type { AIUsageEntry } from '../ai/usage-log'
+import type { TemporalFact } from '../types/temporal-fact'
+import type { RetrievalChunk } from '../types/retrieval-chunk'
+import type { NarrativeSummaryNode } from '../types/narrative-summary'
 
 class StoryForgeDB extends Dexie {
   projects!: Table<Project>
@@ -69,13 +69,6 @@ class StoryForgeDB extends Dexie {
   importLogs!: Table<ImportLog>
   importFiles!: Table<ImportFileBlob, number>
   promptWorkflows!: Table<PromptWorkflow>
-
-  // Phase 19 —— 作品学习系统（与创作数据物理隔离）
-  masterWorks!: Table<MasterWork, number>
-  masterChunkAnalysis!: Table<MasterChunkAnalysis, number>
-  masterChapterBeats!: Table<MasterChapterBeat, number>
-  masterStyleMetrics!: Table<MasterStyleMetrics, number>
-  masterInsights!: Table<MasterInsight, number>
 
   // Phase 20 —— 参考作品深度分析（八维分块分析）
   referenceChunkAnalysis!: Table<ReferenceChunkAnalysis, number>
@@ -126,6 +119,15 @@ class StoryForgeDB extends Dexie {
 
   // AI 消耗统计
   aiUsageLog!: Table<AIUsageEntry, number>
+
+  // NS-4 —— 时序事实账本（双层事实记忆：status candidate=Evidence Observation / confirmed=Canon Assertion）
+  temporalFacts!: Table<TemporalFact, number>
+
+  // NS-5 —— 叙事感知混合检索块（可重建派生缓存，不导出）
+  retrievalChunks!: Table<RetrievalChunk, number>
+
+  // NS-5 —— 章→卷→全书层级摘要树（可重建派生缓存，不导出）
+  narrativeSummaryNodes!: Table<NarrativeSummaryNode, number>
 
   constructor() {
     super('storyforge')
@@ -318,6 +320,54 @@ class StoryForgeDB extends Dexie {
           r.analysisProgress = 0
         }
       })
+    })
+
+    // v32: 下线「作品学习」旧子系统（已被「项目参考·作品分析」取代）。
+    //   删除 5 张 master 表(masterWorks/masterChunkAnalysis/masterChapterBeats/
+    //   masterStyleMetrics/masterInsights)。仅作品分析数据,非手稿,直接置 null 删除。
+    this.version(32).stores({
+      masterWorks: null,
+      masterChunkAnalysis: null,
+      masterChapterBeats: null,
+      masterStyleMetrics: null,
+      masterInsights: null,
+    })
+
+    // v33: R1 角色模型拆成戏份权重 + DnD 九宫格双轴。
+    // 旧 role 保留为派生兼容字段；升级前先在 snapshots 写入受影响角色原始行。
+    this.version(33).stores({
+      characters: '++id, projectId, name, role, roleWeight, moralAxis, orderAxis',
+    }).upgrade(async (tx) => {
+      await migrateCharactersToAxes(tx)
+    })
+
+    // v34: 治存量脏数据。历史上 outlineNodes.summary 是非可选字段，但老数据/跨版本导入
+    // 的项目可能整体缺该键（卷通常无章纲摘要），落库即 undefined → 大纲渲染 `summary.trim()`
+    // 崩溃（社区「chrome 导入后必现」）。统一兜成 ''，恢复 summary 恒为 string 的不变量。
+    // 无 schema/索引变化，仅数据修复。新写入/导入由 PROJECT_TABLES.defaults 在边界兜底。
+    this.version(34).stores({}).upgrade(async (tx) => {
+      await tx.table('outlineNodes').toCollection().modify((node: any) => {
+        if (node.summary == null) node.summary = ''
+      })
+    })
+
+    // v35: NS-4 时序事实账本。新增 temporalFacts 后，把旧 stateCards 无损桥接为
+    // Evidence Observation 候选：旧状态卡原样保留，不自动升 Canon，不删除不覆盖。
+    this.version(35).stores({
+      temporalFacts: '++id, projectId, worldGroupId, characterId, locationId, codexEntryId, predicate, status, sourceChapterId',
+    }).upgrade(async (tx) => {
+      await migrateStateCardsToTemporalFactCandidates(tx)
+    })
+
+    // v36: NS-5 检索块（可重建派生缓存，从章节正文切块）。新增空表，不转换存量数据。
+    this.version(36).stores({
+      retrievalChunks: '++id, projectId, worldGroupId, sourceChapterId',
+    })
+
+    // v37: NS-5 层级叙事摘要树（章→卷→全书）。派生缓存，不导出；
+    // 老项目通过设置页“建立检索索引”或生成上下文前按需重建。
+    this.version(37).stores({
+      narrativeSummaryNodes: '++id, projectId, worldGroupId, level, sourceChapterId, sourceOutlineNodeId, status',
     })
   }
 }

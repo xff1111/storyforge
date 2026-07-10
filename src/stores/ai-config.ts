@@ -1,11 +1,50 @@
 import { create } from 'zustand'
-import type { AIConfig, AIProvider, AIConfigPreset } from '../lib/types'
+import type { AIConfig, AIProvider, AIConfigPreset, EmbeddingConfig } from '../lib/types'
 import { PROVIDER_PRESETS } from '../lib/types'
 import { createLog, updateLog } from '../lib/ai/logger'
 import { nanoid } from '../lib/utils/id'
+import { buildOpenAIEndpoint, normalizeOpenAIBaseUrl } from '../lib/ai/openai-endpoint'
 
 const STORAGE_KEY = 'storyforge-ai-config'
 const PRESETS_KEY = 'storyforge-ai-presets'
+const SESSION_API_KEY = 'storyforge-ai-api-key-session'
+const REMEMBER_API_KEY = 'storyforge-ai-api-key-remember'
+const EMBEDDING_KEY = 'storyforge-embedding-config'
+const EMBEDDING_SESSION_KEY = 'storyforge-embedding-key-session'
+
+const DEFAULT_CONFIG: AIConfig = {
+  provider: 'deepseek',
+  apiKey: '',
+  model: 'deepseek-chat',
+  baseUrl: 'https://api.deepseek.com/v1',
+  temperature: 0.7,
+  maxTokens: 0,
+}
+
+/** NS-5 默认：关闭；隐私首选本地 Ollama + bge-m3（手稿不出本机）。 */
+const DEFAULT_EMBEDDING: EmbeddingConfig = {
+  enabled: false,
+  provider: 'ollama',
+  apiKey: '',
+  baseUrl: 'http://localhost:11434/v1',
+  model: 'bge-m3',
+}
+
+/** embedding 配置加载：key 复用与聊天 key 相同的「记住」开关（不记住→sessionStorage）。 */
+function loadEmbeddingConfig(rememberApiKey: boolean): EmbeddingConfig {
+  let saved: Partial<EmbeddingConfig> = {}
+  try { const raw = localStorage.getItem(EMBEDDING_KEY); if (raw) saved = JSON.parse(raw) } catch { /* ignore */ }
+  const sessionKey = sessionStorage.getItem(EMBEDDING_SESSION_KEY) || ''
+  return { ...DEFAULT_EMBEDDING, ...saved, apiKey: rememberApiKey ? (saved.apiKey || '') : sessionKey }
+}
+
+function persistEmbeddingConfig(cfg: EmbeddingConfig, rememberApiKey: boolean): void {
+  const persisted: EmbeddingConfig = rememberApiKey ? cfg : { ...cfg, apiKey: '' }
+  localStorage.setItem(EMBEDDING_KEY, JSON.stringify(persisted))
+  if (rememberApiKey) sessionStorage.removeItem(EMBEDDING_SESSION_KEY)
+  else if (cfg.apiKey) sessionStorage.setItem(EMBEDDING_SESSION_KEY, cfg.apiKey)
+  else sessionStorage.removeItem(EMBEDDING_SESSION_KEY)
+}
 
 /** 从 localStorage 加载预设列表 */
 function loadPresets(): AIConfigPreset[] {
@@ -73,19 +112,43 @@ function getChineseExplanation(status: number, msg: string): string {
 }
 
 /** 从 localStorage 加载配置 */
-function loadConfig(): AIConfig {
+function loadInitialConfig(): { config: AIConfig; rememberApiKey: boolean } {
+  let savedConfig: Partial<AIConfig> = {}
   try {
     const saved = localStorage.getItem(STORAGE_KEY)
-    if (saved) return JSON.parse(saved)
+    if (saved) savedConfig = JSON.parse(saved)
   } catch { /* ignore */ }
+
+  const rememberRaw = localStorage.getItem(REMEMBER_API_KEY)
+  const legacyHasLocalKey = typeof savedConfig.apiKey === 'string' && savedConfig.apiKey.length > 0
+  const rememberApiKey = rememberRaw == null ? legacyHasLocalKey : rememberRaw === 'true'
+  const sessionKey = sessionStorage.getItem(SESSION_API_KEY) || ''
+
   return {
-    provider: 'deepseek',
-    apiKey: '',
-    model: 'deepseek-chat',
-    baseUrl: 'https://api.deepseek.com/v1',
-    temperature: 0.7,
-    maxTokens: 0,
+    config: {
+      ...DEFAULT_CONFIG,
+      ...savedConfig,
+      apiKey: rememberApiKey ? (savedConfig.apiKey || '') : sessionKey,
+    },
+    rememberApiKey,
   }
+}
+
+function persistConfig(config: AIConfig, rememberApiKey: boolean): void {
+  const persisted: AIConfig = rememberApiKey ? config : { ...config, apiKey: '' }
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(persisted))
+  localStorage.setItem(REMEMBER_API_KEY, String(rememberApiKey))
+  if (rememberApiKey) {
+    sessionStorage.removeItem(SESSION_API_KEY)
+  } else if (config.apiKey) {
+    sessionStorage.setItem(SESSION_API_KEY, config.apiKey)
+  } else {
+    sessionStorage.removeItem(SESSION_API_KEY)
+  }
+}
+
+function presetConfig(config: AIConfig, rememberApiKey: boolean): AIConfig {
+  return rememberApiKey ? { ...config } : { ...config, apiKey: '' }
 }
 
 export interface TestResult {
@@ -97,10 +160,17 @@ export interface TestResult {
 
 interface AIConfigStore {
   config: AIConfig
+  rememberApiKey: boolean
   presets: AIConfigPreset[]
   /** 当前生效的预设 id（null = 未对应任何预设/已改动） */
   activePresetId: string | null
+  /** 最近一次应用/保存的预设 id；表单改动后仍保留,用于显式覆盖当前预设。 */
+  editingPresetId: string | null
+  /** NS-5 语义检索（embedding）配置 */
+  embedding: EmbeddingConfig
+  setEmbeddingConfig: (partial: Partial<EmbeddingConfig>) => void
   setConfig: (config: Partial<AIConfig>) => void
+  setRememberApiKey: (remember: boolean) => void
   switchProvider: (provider: AIProvider) => void
   testConnection: () => Promise<TestResult>
   // ── 预设管理 ──
@@ -111,39 +181,63 @@ interface AIConfigStore {
   deletePreset: (id: string) => void
 }
 
+const initial = loadInitialConfig()
+
 export const useAIConfigStore = create<AIConfigStore>((set, get) => ({
-  config: loadConfig(),
+  config: initial.config,
+  rememberApiKey: initial.rememberApiKey,
   presets: loadPresets(),
   activePresetId: null,
+  editingPresetId: null,
+  embedding: loadEmbeddingConfig(initial.rememberApiKey),
+
+  setEmbeddingConfig: (partial: Partial<EmbeddingConfig>) => {
+    const next = { ...get().embedding, ...partial }
+    persistEmbeddingConfig(next, get().rememberApiKey)
+    set({ embedding: next })
+  },
 
   setConfig: (partial: Partial<AIConfig>) => {
     const newConfig = { ...get().config, ...partial }
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(newConfig))
+    persistConfig(newConfig, get().rememberApiKey)
     // 手动改动配置后，与已选预设脱钩（除非改动等于该预设）
     set({ config: newConfig, activePresetId: null })
   },
 
+  setRememberApiKey: (remember: boolean) => {
+    persistConfig(get().config, remember)
+    persistEmbeddingConfig(get().embedding, remember)
+    set({ rememberApiKey: remember })
+  },
+
   saveAsPreset: (name: string) => {
     const id = nanoid()
-    const preset: AIConfigPreset = { id, name: name.trim() || '未命名配置', config: { ...get().config } }
+    const preset: AIConfigPreset = {
+      id,
+      name: name.trim() || '未命名配置',
+      config: presetConfig(get().config, get().rememberApiKey),
+    }
     const presets = [...get().presets, preset]
     savePresets(presets)
-    set({ presets, activePresetId: id })
+    set({ presets, activePresetId: id, editingPresetId: id })
     return id
   },
 
   applyPreset: (id: string) => {
     const preset = get().presets.find(p => p.id === id)
     if (!preset) return
-    const newConfig = { ...preset.config }
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(newConfig))
-    set({ config: newConfig, activePresetId: id })
+    const newConfig = { ...preset.config, apiKey: preset.config.apiKey || get().config.apiKey }
+    persistConfig(newConfig, get().rememberApiKey)
+    set({ config: newConfig, activePresetId: id, editingPresetId: id })
   },
 
   updatePresetFromCurrent: (id: string) => {
-    const presets = get().presets.map(p => p.id === id ? { ...p, config: { ...get().config } } : p)
+    const presets = get().presets.map(p => p.id === id ? {
+      ...p,
+      config: presetConfig(get().config, get().rememberApiKey),
+    } : p)
     savePresets(presets)
-    set({ presets, activePresetId: id })
+    set({ presets, activePresetId: id, editingPresetId: id })
   },
 
   renamePreset: (id: string, name: string) => {
@@ -155,7 +249,11 @@ export const useAIConfigStore = create<AIConfigStore>((set, get) => ({
   deletePreset: (id: string) => {
     const presets = get().presets.filter(p => p.id !== id)
     savePresets(presets)
-    set({ presets, activePresetId: get().activePresetId === id ? null : get().activePresetId })
+    set({
+      presets,
+      activePresetId: get().activePresetId === id ? null : get().activePresetId,
+      editingPresetId: get().editingPresetId === id ? null : get().editingPresetId,
+    })
   },
 
   switchProvider: (provider: AIProvider) => {
@@ -166,16 +264,22 @@ export const useAIConfigStore = create<AIConfigStore>((set, get) => ({
       ...preset,
       apiKey: provider === get().config.provider ? get().config.apiKey : (preset.apiKey || ''),
     }
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(newConfig))
-    set({ config: newConfig, activePresetId: null })
+    persistConfig(newConfig, get().rememberApiKey)
+    set({ config: newConfig, activePresetId: null, editingPresetId: null })
   },
 
   testConnection: async (): Promise<TestResult> => {
     const { config } = get()
-    // 标准化 baseUrl：去除尾部斜杠
-    const baseUrl = config.baseUrl.replace(/\/+$/, '')
-    const url = `${baseUrl}/chat/completions`
+    const normalized = normalizeOpenAIBaseUrl(config.baseUrl)
+    if (normalized.changed) {
+      const newConfig = { ...config, baseUrl: normalized.baseUrl }
+      persistConfig(newConfig, get().rememberApiKey)
+      set({ config: newConfig, activePresetId: null })
+    }
+    const url = buildOpenAIEndpoint(normalized.baseUrl, 'chat/completions')
     const startTime = Date.now()
+    const controller = new AbortController()
+    const timeoutId = window.setTimeout(() => controller.abort(), 15_000)
 
     // 创建日志
     const log = createLog({
@@ -189,6 +293,7 @@ export const useAIConfigStore = create<AIConfigStore>((set, get) => ({
     try {
       const response = await fetch(url, {
         method: 'POST',
+        signal: controller.signal,
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${config.apiKey}`,
@@ -204,7 +309,8 @@ export const useAIConfigStore = create<AIConfigStore>((set, get) => ({
 
       if (response.ok) {
         updateLog(log.id, { status: 'success', statusCode: response.status, duration, responseBody: bodyText.slice(0, 200) })
-        return { ok: true, message: '✅ 连接成功', statusCode: response.status, duration }
+        const prefix = normalized.warnings.length ? `${normalized.warnings.join(' ')} ` : ''
+        return { ok: true, message: `✅ ${prefix}连接成功`, statusCode: response.status, duration }
       }
 
       // 解析错误信息
@@ -225,10 +331,17 @@ export const useAIConfigStore = create<AIConfigStore>((set, get) => ({
       if (response.status === 402) {
         const msg = `${rawErrorMsg}（${cnExplanation}）`
         updateLog(log.id, { status: 'success', statusCode: response.status, duration, responseBody: bodyText.slice(0, 200) })
-        return { ok: true, message: `✅ 连接成功 — ${msg}`, statusCode: response.status, duration }
+        const prefix = normalized.warnings.length ? `${normalized.warnings.join(' ')} ` : ''
+        return { ok: true, message: `✅ ${prefix}连接成功 — ${msg}`, statusCode: response.status, duration }
       }
 
-      const errorMsg = cnExplanation ? `${rawErrorMsg}（${cnExplanation}）` : rawErrorMsg
+      const urlHint = normalized.warnings.length
+        ? `；${normalized.warnings.join(' ')}`
+        : ''
+      const localHint = ['custom', 'ollama'].includes(config.provider)
+        ? '；本地 OpenAI 兼容服务的 Base URL 通常应填到 /v1，例如 LM Studio: http://主机:1234/v1，Ollama: http://localhost:11434/v1'
+        : ''
+      const errorMsg = `${cnExplanation ? `${rawErrorMsg}（${cnExplanation}）` : rawErrorMsg}${urlHint}${localHint}`
 
       updateLog(log.id, { status: 'error', statusCode: response.status, duration, errorMessage: errorMsg, responseBody: bodyText.slice(0, 500) })
       return { ok: false, message: `❌ ${errorMsg}`, statusCode: response.status, duration }
@@ -248,6 +361,8 @@ export const useAIConfigStore = create<AIConfigStore>((set, get) => ({
 
       updateLog(log.id, { status: 'error', duration, errorMessage: errorMsg })
       return { ok: false, message: `❌ ${errorMsg}`, duration }
+    } finally {
+      window.clearTimeout(timeoutId)
     }
   },
 }))

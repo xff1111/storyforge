@@ -2,8 +2,7 @@
  * 提示词模板系统类型定义
  *
  * Phase 1 落地范围：把硬编码 prompts 下沉到 IndexedDB。
- * 详见 docs/09-REDESIGN-INTEGRATION-PLAN.md 第三章 与
- *      docs/playbooks/PHASE-01-prompt-infrastructure.md
+ * 历史设计详见 WPS 云文档 storyforge故事熔炉 / 仓库文档迁移_20260708 / archive。
  */
 
 /** 提示词模块标识 — Phase 1 当前用到的全集 */
@@ -19,6 +18,7 @@ export type PromptModuleKey =
   // 章节正文
   | 'chapter.content'
   | 'chapter.continue'
+  | 'chapter.memory'
   | 'chapter.polish'
   | 'chapter.expand'
   | 'chapter.de-ai'
@@ -50,14 +50,19 @@ export type PromptModuleKey =
   | 'world-group.expand'
   // —— Phase 25.5.2-b 物品栏 ——
   | 'inventory.extract'
+  // —— C-1/C-2 通用词条拆分 ——
+  | 'codex.extract'
+  // —— C-6 重要地点提取 ——
+  | 'location.extract'
+  | 'codex.extract'
+  | 'location.extract'
   // —— Phase 25.5.2-a 故事进程年表 ——
   | 'story-timeline.extract'
   // —— Phase 27.2a 场景考证 ——
   | 'scene.verify'
-  // —— Phase 19 作品学习 ——
-  | 'master.analyze-chunk'
-  | 'master.extract-beats'
-  | 'master.generate-insights'
+  // —— H1.5 历史年表双 agent ——
+  | 'history.consult'
+  | 'history.storm'
   // —— FB-5 自适应文风学习 ——
   | 'style.learn'
 
@@ -75,6 +80,8 @@ export interface PromptParameter {
   min?: number
   max?: number
   step?: number
+  /** slider 专用:上限动态取「当前所选模型的最大输出」(换算字数),覆盖 max。用于字数类滑块,放开写死的低天花板。 */
+  maxFromModelOutput?: boolean
   /** 默认值（按 type 决定） */
   default: string | number | boolean
   /** 短描述（鼠标悬停或副标题展示） */
@@ -127,6 +134,8 @@ export interface PromptTemplate {
   }
   /** 短篇模式标识（短篇 / 中篇 / 长篇）— 影响默认参数 */
   lengthMode?: 'short' | 'medium' | 'long'
+  /** NS-1: 连续性保护块策略。 */
+  continuityMode?: 'inherit' | 'required' | 'off'
 
   createdAt: number
   updatedAt: number
@@ -158,12 +167,13 @@ export interface PromptVariableContext {
   volumeSummary?: string
   prevVolumeSummary?: string
   targetWordCount?: number
-  estimatedVolumes?: number
+  estimatedVolumes?: number | string
   // 章节
   chapterTitle?: string
   chapterSummary?: string
   previousChapterEnding?: string
   existingContent?: string
+  chapterText?: string
   // 编辑/润色
   text?: string
   instruction?: string
@@ -177,6 +187,13 @@ export interface PromptVariableContext {
   imageStyle?: string
   // 通用
   dimension?: string
+  categoryName?: string
+  fieldSchema?: string
+  existingEntries?: string
+  supplementTags?: string
+  sourceText?: string
+  allowedTags?: string
+  knownItemNames?: string
   userHint?: string
   // 兜底（任意自定义键）
   [extra: string]: string | number | undefined

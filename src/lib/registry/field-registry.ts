@@ -22,6 +22,21 @@ const roleAliases: Record<string, string> = {
   龙套: 'extra',
 }
 
+const roleWeightAliases: Record<string, string> = {
+  主要: 'main',
+  主要角色: 'main',
+  核心角色: 'main',
+  主角: 'main',
+  反派: 'main',
+  重要配角: 'main',
+  次要: 'secondary',
+  次要角色: 'secondary',
+  NPC: 'npc',
+  npc: 'npc',
+  路人: 'extra',
+  龙套: 'extra',
+}
+
 const chapterStatusAliases: Record<string, string> = {
   大纲: 'outline',
   草稿: 'draft',
@@ -78,6 +93,11 @@ function json(target: string, field: string, aliases?: string[]): FieldSpec {
   return { target, field, type: 'json', aliases }
 }
 
+/** IndexedDB 原生对象字段（区别于以 JSON string 存储的 json 字段）。 */
+function object(target: string, field: string, aliases?: string[]): FieldSpec {
+  return { target, field, type: 'object', aliases }
+}
+
 function arr(target: string, field: string, aliases?: string[]): FieldSpec {
   return { target, field, type: 'array', aliases }
 }
@@ -104,7 +124,7 @@ export const FIELD_REGISTRY: FieldSpec[] = [
   // worldviews: v3 结构字段。summary 作为 AI 反推别名归一到 worldOrigin。
   longtext('worldviews', 'worldOrigin', ['summary', 'origin', 'worldSummary', '世界来源', '世界起源']),
   longtext('worldviews', 'powerHierarchy', ['powerSystem', 'power', '力量体系']),
-  json('worldviews', 'divineDesign', ['divinity', '神明设定']),
+  object('worldviews', 'divineDesign', ['divinity', '神明设定']),
   longtext('worldviews', 'worldStructure', ['structure', '世界结构']),
   longtext('worldviews', 'worldDimensions', ['dimensions', '世界尺寸']),
   longtext('worldviews', 'continentLayout', ['continent', 'layout', '地貌分布', '大陆分布']),
@@ -112,7 +132,7 @@ export const FIELD_REGISTRY: FieldSpec[] = [
   longtext('worldviews', 'mountainsRivers', ['山川河流']),
   longtext('worldviews', 'climateByRegion', ['climate', '气候']),
   longtext('worldviews', 'naturalResourceOverview', ['自然资源概述', '自然资源全貌']),
-  json('worldviews', 'naturalResources', ['resources', '自然资源']),
+  object('worldviews', 'naturalResources', ['resources', '自然资源']),
   longtext('worldviews', 'historyLine', ['history', 'worldHistory', '历史线']),
   longtext('worldviews', 'worldEvents', ['events', '大事记']),
   longtext('worldviews', 'races', ['species', '种族']),
@@ -139,6 +159,35 @@ export const FIELD_REGISTRY: FieldSpec[] = [
     roleAliases,
     ['定位', '角色定位'],
   ),
+  enumeration(
+    'characters',
+    'roleWeight',
+    ['main', 'secondary', 'npc', 'extra'],
+    roleWeightAliases,
+    ['戏份', '戏份权重', '角色权重'],
+  ),
+  enumeration(
+    'characters',
+    'moralAxis',
+    ['good', 'neutral', 'evil'],
+    {
+      善: 'good', 善良: 'good', 正派: 'good',
+      中: 'neutral', 中立: 'neutral', 绝对中立: 'neutral',
+      恶: 'evil', 邪恶: 'evil', 反派: 'evil',
+    },
+    ['道德轴', '善恶轴'],
+  ),
+  enumeration(
+    'characters',
+    'orderAxis',
+    ['lawful', 'neutral', 'chaotic'],
+    {
+      守序: 'lawful', 秩序: 'lawful',
+      中立: 'neutral', 绝对中立: 'neutral',
+      混乱: 'chaotic',
+    },
+    ['秩序轴', '守序混乱轴'],
+  ),
   enumeration('characters', 'alignment', ['good', 'evil'], { 正派: 'good', 反派: 'evil', 善: 'good', 恶: 'evil' }, ['阵营']),
   longtext('characters', 'shortDescription', ['description', 'summary', '简介', '一句话简介']),
   longtext('characters', 'appearance', ['外貌']),
@@ -148,6 +197,20 @@ export const FIELD_REGISTRY: FieldSpec[] = [
   longtext('characters', 'abilities', ['能力']),
   longtext('characters', 'relationships', ['关系']),
   longtext('characters', 'arc', ['角色弧光', '成长线']),
+  // 扩展角色维度（CHARACTER_DIMENSIONS 描述符的写权威；AI 输出经 adopt() 写回）
+  longtext('characters', 'identity', ['身份', '职业', '势力', '势力归属']),
+  text('characters', 'profile', ['年龄性别', '基础信息', '年龄', '性别', '种族']),
+  longtext('characters', 'values', ['价值观', '信念']),
+  longtext('characters', 'strengths', ['优点', '长处']),
+  longtext('characters', 'weaknesses', ['缺点', '弱点', '性格弱点']),
+  longtext('characters', 'fears', ['恐惧', '软肋', '逆鳞']),
+  longtext('characters', 'goals', ['目标', '短期目标', '长期目标']),
+  longtext('characters', 'innerConflict', ['核心矛盾', '内心冲突']),
+  longtext('characters', 'keyEvents', ['关键经历', '转折事件', '重要经历']),
+  text('characters', 'powerLevel', ['实力定位', '境界', '等级', '战力']),
+  longtext('characters', 'speechStyle', ['语言风格', '口头禅', '说话方式']),
+  longtext('characters', 'habits', ['习惯', '小动作', '癖好']),
+  text('characters', 'signatureItem', ['标志性物品', '形象符号', '标志物']),
   text('characters', 'location', ['常驻地点']),
   text('characters', 'firstAppearance', ['首次出场']),
   longtext('characters', 'storyRole', ['作用', '角色作用']),
@@ -186,6 +249,10 @@ export const FIELD_REGISTRY: FieldSpec[] = [
   text('chapters', 'title', ['标题']),
   longtext('chapters', 'content', ['正文']),
   longtext('chapters', 'summary', ['章节摘要']),
+  object('chapters', 'continuityHandoff', ['章节交接记忆', '连续性交接']),
+  object('chapters', 'planReconciliation', ['计划正文对账', '实际进展约束']),
+  text('chapters', 'summarySourceTextHash'),
+  text('chapters', 'summaryTextNormalizationVersion'),
   num('chapters', 'outlineNodeId'),
   num('chapters', 'wordCount'),
   enumeration('chapters', 'status', ['outline', 'draft', 'revised', 'polished', 'final'], chapterStatusAliases, ['状态']),
@@ -193,7 +260,8 @@ export const FIELD_REGISTRY: FieldSpec[] = [
   longtext('chapters', 'notes', ['笔记']),
 
   num('detailedOutlines', 'outlineNodeId'),
-  json('detailedOutlines', 'scenes', ['场景']),
+  // scenes 必须是数组语义：`json` 会被 adopt() JSON.stringify 成字符串 → 渲染端 .map/.reduce 崩溃（CF-2）。
+  arr('detailedOutlines', 'scenes', ['场景']),
   longtext('detailedOutlines', 'openingHook'),
   longtext('detailedOutlines', 'endingCliffhanger'),
   text('detailedOutlines', 'sceneLocation'),
@@ -223,7 +291,7 @@ export const FIELD_REGISTRY: FieldSpec[] = [
 
   // codex
   text('codexCategories', 'name', ['分类名']),
-  enumeration('codexCategories', 'domain', ['natural', 'humanity'], { 自然: 'natural', 自然环境: 'natural', 人文: 'humanity', 人文环境: 'humanity' }),
+  enumeration('codexCategories', 'domain', ['natural', 'humanity', 'origin'], { 自然: 'natural', 自然环境: 'natural', 人文: 'humanity', 人文环境: 'humanity', 起源: 'origin', 世界起源: 'origin' }),
   num('codexCategories', 'parentId'),
   text('codexCategories', 'icon'),
   text('codexCategories', 'builtInKey'),
@@ -239,8 +307,38 @@ export const FIELD_REGISTRY: FieldSpec[] = [
   longtext('codexEntries', 'description', ['描述']),
   json('codexEntries', 'fields', ['字段']),
   json('codexEntries', 'refs', ['引用']),
+  json('codexEntries', 'tags', ['标签']),
+  num('codexEntries', 'importance', ['重要度']),
   num('codexEntries', 'order'),
   num('codexEntries', 'worldGroupId'),
+
+  // importantLocations / downstream extraction products
+  text('importantLocations', 'name', ['地点名']),
+  json('importantLocations', 'tags', ['地点标签']),
+  longtext('importantLocations', 'description', ['地点描述']),
+  longtext('importantLocations', 'significance', ['剧情重要性']),
+  num('importantLocations', 'parentId'),
+  num('importantLocations', 'sortOrder'),
+
+  text('itemLedger', 'itemName', ['物品名']),
+  enumeration('itemLedger', 'action', ['gain', 'consume'], { 获得: 'gain', 消耗: 'consume', 失去: 'consume' }),
+  num('itemLedger', 'quantity', ['数量']),
+  num('itemLedger', 'chapterId'),
+  text('itemLedger', 'chapterTitle', ['章节标题']),
+  longtext('itemLedger', 'note', ['备注']),
+
+  text('storyTimelineEvents', 'title', ['事件标题']),
+  text('storyTimelineEvents', 'storyTime', ['故事时间']),
+  num('storyTimelineEvents', 'importance', ['重要度']),
+  longtext('storyTimelineEvents', 'description', ['事件描述']),
+  num('storyTimelineEvents', 'chapterId'),
+  text('storyTimelineEvents', 'chapterTitle', ['章节标题']),
+  num('storyTimelineEvents', 'order'),
+
+  enumeration('stateCards', 'category', ['character', 'location', 'item', 'faction', 'event']),
+  text('stateCards', 'entityName', ['角色名', '实体名']),
+  json('stateCards', 'fields', ['状态字段']),
+  num('stateCards', 'lastChapterId'),
 ]
 
 export const FIELD_BY_TARGET: ReadonlyMap<string, FieldSpec[]> = new Map(

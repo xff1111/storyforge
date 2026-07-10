@@ -26,8 +26,8 @@ describe('Phase 1.1a · PROJECT_TABLES 注册表', () => {
       expect(result.ok, result.errors.join('; ')).toBe(true)
     })
 
-    it('登记了全部 44 张表', () => {
-      expect(PROJECT_TABLES.length).toBe(44)   // v29 删 itemSystems/factions:45→43;FB-5 加 userStyleProfiles:43→44
+    it('登记了全部 42 张表', () => {
+      expect(PROJECT_TABLES.length).toBe(42)   // v36 retrievalChunks→41；v37 narrativeSummaryNodes→42
     })
 
     it('每张表名唯一', () => {
@@ -58,7 +58,7 @@ describe('Phase 1.1a · PROJECT_TABLES 注册表', () => {
 
     it('projectScopedTables 不含 global 表', () => {
       const names = projectScopedTables().map(s => s.name)
-      for (const t of ['promptTemplates', 'promptWorkflows', 'masterInsights']) {
+      for (const t of ['promptTemplates', 'promptWorkflows']) {
         expect(names).not.toContain(t)
       }
     })
@@ -71,6 +71,15 @@ describe('Phase 1.1a · PROJECT_TABLES 注册表', () => {
       expect(tableNames).toContain('worldGroups')
       expect(tableNames).toContain('codexEntries')
       expect(tableNames).toContain('worldRulesProfiles')
+    })
+
+    it('transactionTablesFor(importProject) 从 projectScopedTables 派生', () => {
+      const importNames = transactionTablesFor('importProject').map(t => t.name).sort()
+      const projectScopedNames = projectScopedTables().map(s => s.table.name).sort()
+      expect(importNames).toEqual(projectScopedNames)
+      expect(importNames).toContain('projects')
+      expect(importNames).toContain('codexEntries')
+      expect(importNames).not.toContain('promptTemplates')
     })
   })
 
@@ -94,12 +103,6 @@ describe('Phase 1.1a · PROJECT_TABLES 注册表', () => {
       } as any) as number
       await db.importLogs.add({ sessionId, level: 'info', message: 'm', timestamp: now } as any)
       await db.importFiles.put({ sessionId, filename: 'f', blob: new Blob(['x']), fileHash: 'h', createdAt: now } as any)
-      const workId = await db.masterWorks.add({
-        projectId, name: 'W', author: 'a', genre: 'g', filename: 'w', fileSize: 1,
-        fileHash: 'm', analysisDepth: 'standard', analysisStatus: 'done',
-        analysisProgress: 100, totalChunks: 1, createdAt: now, updatedAt: now,
-      } as any) as number
-      await db.importFiles.put({ sessionId: 100000 + workId, filename: 'w', blob: new Blob(['novel']), fileHash: 'm', createdAt: now } as any)
 
       await cascadeDeleteProject(projectId)
 
@@ -108,8 +111,7 @@ describe('Phase 1.1a · PROJECT_TABLES 注册表', () => {
       expect(await db.characters.where('projectId').equals(projectId).count()).toBe(0)
       expect(await db.importSessions.where('projectId').equals(projectId).count()).toBe(0)
       expect(await db.importLogs.where('sessionId').equals(sessionId).count()).toBe(0)
-      expect(await db.importFiles.count(), 'importFiles 应全清(普通+master blob)').toBe(0)
-      expect(await db.masterWorks.where('projectId').equals(projectId).count()).toBe(0)
+      expect(await db.importFiles.count(), 'importFiles 应全清(间接归属 blob)').toBe(0)
     })
 
     it('cascadeDeleteGroup 删世界数据 + 内置词条分类保留 + 大纲 setNull', async () => {

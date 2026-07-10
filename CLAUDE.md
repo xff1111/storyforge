@@ -88,7 +88,7 @@
 | `docs/WORLD-RULES-MULTIWORLD-DESIGN.md` | 🟢 待实施设计 | Phase 40（多世界化真实与幻想） |
 | `docs/CODEX-REDESIGN.md` | 🟢 待实施设计 | Phase 35 词条化重构 |
 | `docs/CONSISTENCY-CHECK-DESIGN.md` | 🟢 待实施设计 | Phase 38/39 |
-| ⚠️ `docs/AI-FUNCTIONS-MANUAL.md` | 🔴 已废弃手写版 | 21 处 prompt key 错，不可信。生成器上线后删除 |
+| `docs/AI-FUNCTIONS-MANUAL.generated.md` | 🟢 AI 功能清单 | 由代码生成的当前权威版本；旧手写版 `docs/AI-FUNCTIONS-MANUAL.md` 仅作历史参考，不再作为施工依据 |
 | ⚠️ `docs/ARCHITECTURE-REFACTOR.md` | 🔴 v1 已废弃 | 被 MASTER-BLUEPRINT 取代 |
 
 ---
@@ -132,6 +132,22 @@
 - [ ] commit message 含任务 ID + 完成判据状态 + 验证证据
 - [ ] **如果改了 DB schema** → 已写迁移测试 + 已在测试项目跑过导出/导入往返
 - [ ] **如果新增了表/字段/源/动作** → 已同步更新对应注册表
+
+---
+
+## ✅ 完成定义（Definition of Done · 交付前必逐条勾选）
+
+> **为什么有这条**：词条化等历史返工的根因不是技术难，而是"加功能不收口、半成品单列出来留着不管"。不立规矩，屎山会以"半成品堆积"的形态再长出来。本条是**流程防线**，与三注册表（数据防线）、ESLint（代码防线）互补。
+
+一个功能 / 任务要算"完成"，必须**同时**满足：
+
+1. **可用**：主路径端到端走得通（不是"代码写完了"，是"用户真能用出结果"）。
+2. **无重复 / 旧入口已下线**：🚫 不允许新旧并存。新功能取代老功能时，**老入口必须同步删除或下线**，不能侧栏 / 面板里新旧两个都挂着让用户困惑。
+3. **数据读写走注册表**：读经 `CONTEXT_SOURCES`、写经 `adopt()`、表生命周期经 `PROJECT_TABLES`。没有裸 `db.xxx` 散写。
+4. **半成品必须对用户不可见**：若一个功能暂时做不完，**明确标注"实验性 / Labs"并默认隐藏**，不允许"做一半还单列在侧栏 / 正式 UI 里"误导用户。做不完就藏起来，不是摆出来。
+5. **有验证证据**：tsc / build / 对应反例测试 / `check:architecture` / `check:required-tables` 全绿；commit 写清验证证据。
+
+> 交付（合并 main / 部署）前对照本清单逐条勾选。任何一条不满足 → 不算完成，要么补齐，要么按第 4 条藏起来。
 
 ---
 

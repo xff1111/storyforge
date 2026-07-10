@@ -14,48 +14,51 @@ import { useReferenceStore } from '../stores/reference'
 import { useEmotionBeatStore } from '../stores/emotion-beat'
 import { useWorldRulesStore } from '../stores/world-rules'
 import { useAutoBackup } from '../hooks/useAutoBackup'
+import { useGistAutoBackup } from '../hooks/useGistAutoBackup'
+import { useFolderAutoBackup } from '../hooks/useFolderAutoBackup'
 import { PanelRight } from 'lucide-react'
 import Sidebar, { type SidebarModule } from '../components/layout/Sidebar'
 import PropertiesPanel from '../components/layout/PropertiesPanel'
 import ProjectInfoPanel from '../components/project/ProjectInfoPanel'
-import ReferencePanel from '../components/project/ReferencePanel'
-import SettingsPage from '../components/settings/SettingsPage'
-import UsageStatsPage from '../components/settings/UsageStatsPage'
-import VersionHistoryPanel from '../components/system/VersionHistoryPanel'
-import ImportDocPanel from '../components/system/ImportDocPanel'
-import PromptManagerPanel from '../components/settings/prompt/PromptManagerPanel'
-// MasterStudiesPanel 已整合进 ReferencePanel（Phase 20）
-import DataManagementPanel from '../components/data/DataManagementPanel'
-import WorldRulesPanel from '../components/worldview/WorldRulesPanel'
-import StoryCorePanel from '../components/worldview/StoryCorePanel'
-import PowerSystemPanel from '../components/worldview/PowerSystemPanel'
-import WorldviewOriginPanel from '../components/worldview/WorldviewOriginPanel'
-import WorldviewNaturalPanel from '../components/worldview/WorldviewNaturalPanel'
-import WorldviewHumanityPanel from '../components/worldview/WorldviewHumanityPanel'
-import CharacterPanel from '../components/character/CharacterPanel'
-import CharacterMinorPanel from '../components/character/CharacterMinorPanel'
-import CharacterNPCPanel from '../components/character/CharacterNPCPanel'
-import CharacterExtraPanel from '../components/character/CharacterExtraPanel'
-import OutlinePanel from '../components/outline/OutlinePanel'
-import DetailedOutlinePanel from '../components/outline/DetailedOutlinePanel'
-import ChaptersListPanel from '../components/editor/ChaptersListPanel'
-import ForeshadowPanel from '../components/foreshadow/ForeshadowPanel'
-import StyleLearningPanel from '../components/style/StyleLearningPanel'
-// Phase 3.5 性能:地图类面板拉 three.js / d3 / azgaar(重),懒加载踢出首屏主包
+// 旧「作品学习」面板已整合进 ReferencePanel（Phase 20，子系统于 v32 下线）
+const ReferencePanel = lazy(() => import('../components/project/ReferencePanel'))
+const SettingsPage = lazy(() => import('../components/settings/SettingsPage'))
+const UsageStatsPage = lazy(() => import('../components/settings/UsageStatsPage'))
+const VersionHistoryPanel = lazy(() => import('../components/system/VersionHistoryPanel'))
+const ImportDocPanel = lazy(() => import('../components/system/ImportDocPanel'))
+const PromptManagerPanel = lazy(() => import('../components/settings/prompt/PromptManagerPanel'))
+const DataManagementPanel = lazy(() => import('../components/data/DataManagementPanel'))
+const WorldRulesPanel = lazy(() => import('../components/worldview/WorldRulesPanel'))
+const StoryCorePanel = lazy(() => import('../components/worldview/StoryCorePanel'))
+const PowerSystemPanel = lazy(() => import('../components/worldview/PowerSystemPanel'))
+const WorldviewOriginPanel = lazy(() => import('../components/worldview/WorldviewOriginPanel'))
+const WorldviewNaturalPanel = lazy(() => import('../components/worldview/WorldviewNaturalPanel'))
+const WorldviewHumanityPanel = lazy(() => import('../components/worldview/WorldviewHumanityPanel'))
+const CharacterPanel = lazy(() => import('../components/character/CharacterPanel'))
+const CharacterMainPanel = lazy(() => import('../components/character/CharacterMainPanel'))
+const CharacterMinorPanel = lazy(() => import('../components/character/CharacterMinorPanel'))
+const CharacterNPCPanel = lazy(() => import('../components/character/CharacterNPCPanel'))
+const CharacterExtraPanel = lazy(() => import('../components/character/CharacterExtraPanel'))
+const OutlinePanel = lazy(() => import('../components/outline/OutlinePanel'))
+const DetailedOutlinePanel = lazy(() => import('../components/outline/DetailedOutlinePanel'))
+const ChaptersListPanel = lazy(() => import('../components/editor/ChaptersListPanel'))
+const ForeshadowPanel = lazy(() => import('../components/foreshadow/ForeshadowPanel'))
+const StyleLearningPanel = lazy(() => import('../components/style/StyleLearningPanel'))
 const GeographyPanel = lazy(() => import('../components/geography/GeographyPanel'))
-import HistoryPanel from '../components/history/HistoryPanel'
-import CreativeRulesPanel from '../components/rules/CreativeRulesPanel'
-import CharacterRelationPanel from '../components/relations/CharacterRelationPanel'
+const HistoryPanel = lazy(() => import('../components/history/HistoryPanel'))
+const CreativeRulesPanel = lazy(() => import('../components/rules/CreativeRulesPanel'))
+const CharacterRelationPanel = lazy(() => import('../components/relations/CharacterRelationPanel'))
 const WorldMapPanel = lazy(() => import('../components/geography/WorldMapPanel'))
-import StatePanel from '../components/state/StatePanel'
-import StoryArcPanel from '../components/outline/StoryArcPanel'
-import CharacterDrivenPlotPanel from '../components/outline/CharacterDrivenPlotPanel'
-import InspirationPanel from '../components/project/InspirationPanel'
-import LocationPanel from '../components/location/LocationPanel'
-import InventoryPanel from '../components/items/InventoryPanel'
-import StoryTimelinePanel from '../components/timeline/StoryTimelinePanel'
-import SceneVerifyPanel from '../components/scene/SceneVerifyPanel'
-import WorldGroupOverview from '../components/world-group/WorldGroupOverview'
+const StatePanel = lazy(() => import('../components/state/StatePanel'))
+const StoryArcPanel = lazy(() => import('../components/outline/StoryArcPanel'))
+const CharacterDrivenPlotPanel = lazy(() => import('../components/outline/CharacterDrivenPlotPanel'))
+const InspirationPanel = lazy(() => import('../components/project/InspirationPanel'))
+const LocationPanel = lazy(() => import('../components/location/LocationPanel'))
+const InventoryPanel = lazy(() => import('../components/items/InventoryPanel'))
+const FactLibraryPanel = lazy(() => import('../components/facts/FactLibraryPanel'))
+const StoryTimelinePanel = lazy(() => import('../components/timeline/StoryTimelinePanel'))
+const SceneVerifyPanel = lazy(() => import('../components/scene/SceneVerifyPanel'))
+const WorldGroupOverview = lazy(() => import('../components/world-group/WorldGroupOverview'))
 import { useLocationStore } from '../stores/location'
 import { useWorldGroupStore } from '../stores/world-group'
 
@@ -83,8 +86,12 @@ export default function WorkspacePage() {
     return hidden
   }, [project?.enableMultiWorld])
 
-  // 自动定时备份（每 5 分钟）
+  // 自动定时备份（每 5 分钟本地快照）
   useAutoBackup(project?.id ?? null)
+  // 云自动备份（开关开启时每 10 分钟推 GitHub Gist）
+  useGistAutoBackup(project?.id ?? null)
+  // 本地文件夹自动备份（绑过文件夹且授权有效时，进入即写 + 每 5 分钟写 JSON 落盘）
+  useFolderAutoBackup(project?.id ?? null)
 
   // 加载项目 + 所有关联数据
   useEffect(() => {
@@ -155,6 +162,9 @@ export default function WorkspacePage() {
     setActiveModule('chapters-list')
   }
 
+  const immersiveModules = new Set<SidebarModule>(['chapters-list', 'editor', 'foreshadow'])
+  const isImmersiveModule = immersiveModules.has(activeModule)
+
   /** 根据当前模块渲染主面板内容 */
   const renderMainPanel = () => {
     switch (activeModule) {
@@ -195,6 +205,8 @@ export default function WorkspacePage() {
       // ── 设定库 - 角色设计 ──────────────────────────────────────────
       case 'characters':
         return <CharacterPanel project={project} />
+      case 'characters-main':
+        return <CharacterMainPanel project={project} />
       case 'characters-minor':
         return <CharacterMinorPanel project={project} />
       case 'characters-npc':
@@ -229,8 +241,16 @@ export default function WorkspacePage() {
         return <StatePanel project={project} />
       case 'inventory':
         return <InventoryPanel project={project} />
+      case 'fact-library':
+        return <FactLibraryPanel project={project} />
       case 'story-timeline':
-        return <StoryTimelinePanel project={project} />
+        return <StoryTimelinePanel
+          project={project}
+          onOpenChapter={(chapterId) => {
+            const chapter = useChapterStore.getState().chapters.find(item => item.id === chapterId)
+            if (chapter) handleOpenChapter(chapter.outlineNodeId)
+          }}
+        />
       case 'scene-verify':
         return <SceneVerifyPanel project={project} />
 
@@ -274,12 +294,18 @@ export default function WorkspacePage() {
       />
 
       {/* 主面板 */}
-      <main className="flex-1 overflow-y-auto p-6 relative">
+      <main
+        className={`relative flex-1 overflow-y-auto ${
+          isImmersiveModule
+            ? 'bg-[radial-gradient(circle_at_top_left,var(--border-subtle)_1px,transparent_1px)] [background-size:32px_32px]'
+            : 'p-6'
+        }`}
+      >
         {/* 属性面板切换按钮 */}
         <button
           onClick={() => setShowProperties(v => !v)}
           title={showProperties ? '关闭属性面板' : '打开属性面板'}
-          className={`absolute top-4 right-4 p-1.5 rounded text-text-muted hover:text-text-primary hover:bg-bg-hover transition-colors z-10 ${showProperties ? 'text-accent' : ''}`}
+          className={`absolute top-4 right-4 z-30 rounded p-1.5 text-text-muted transition-colors hover:bg-bg-hover hover:text-text-primary ${showProperties ? 'text-accent' : ''}`}
         >
           <PanelRight className="w-4 h-4" />
         </button>

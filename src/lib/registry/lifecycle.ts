@@ -41,10 +41,11 @@ export function exportableTables(): TableSpec[] {
  * 防止"事务声明漏表"(Phase 0 反复踩的坑)。
  */
 export function transactionTablesFor(
-  op: 'deleteProject' | 'deleteGroup' | 'migrate',
+  op: 'deleteProject' | 'deleteGroup' | 'migrate' | 'importProject' | 'deleteChapters',
 ): Table[] {
-  if (op === 'deleteProject') {
-    // 删项目:所有非 global 表
+  if (op === 'deleteProject' || op === 'importProject' || op === 'deleteChapters') {
+    // 删项目/导入项目/删章节:所有非 global 表。导入与局部删除事务保持宽表声明,
+    // 避免完整性断言或新增 project-scoped 表漏进事务。
     return projectScopedTables().map(s => s.table)
   }
   if (op === 'deleteGroup') {
@@ -109,8 +110,6 @@ function resolveLinkField(spec: TableSpec): string | null {
   for (const ref of spec.refs ?? []) {
     if (ref.kind === 'indirect') return ref.via.field
   }
-  if (spec.name === 'masterChunkAnalysis' || spec.name === 'masterChapterBeats' ||
-      spec.name === 'masterStyleMetrics') return 'workId'
   if (spec.name === 'referenceChunkAnalysis') return 'referenceId'
   return null
 }
@@ -123,7 +122,7 @@ async function deleteBlobsInTransaction(
   // (1) 普通导入 blob:importFiles 主键 = importSessions.id
   if (importSessionIds.length) await db.importFiles.bulkDelete(importSessionIds)
 
-  // (2) master blob:用 blob-owner ref 的 keyResolver 计算 key
+  // (2) blob-owner ref:用 keyResolver 计算 importFiles key(通用机制,当前无表使用)
   for (const spec of PROJECT_TABLES) {
     for (const ref of spec.refs ?? []) {
       if (ref.kind !== 'blob-owner') continue

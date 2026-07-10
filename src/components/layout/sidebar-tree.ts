@@ -5,7 +5,7 @@ import {
   Ruler, BookOpen, FilePen, Eye,
   FileCog, History, Upload, Download, Settings,
   Map, ClipboardList, GitBranch, Clock, MapPin, Scale,
-  Drama, Package, CalendarClock, ScanSearch, Coins, Feather,
+  Drama, Package, CalendarClock, ScanSearch, Coins, Feather, Database,
 } from 'lucide-react'
 
 /**
@@ -25,7 +25,8 @@ export type SidebarModule =
   | 'worldview-natural'     // 占位 (P5)
   | 'worldview-humanity'    // 占位 (P6)
   | 'story-design'          // = 旧 story-core
-  | 'characters'            // 主要角色（暂用 CharacterPanel 全量）
+  | 'characters'            // 角色生成
+  | 'characters-main'       // 主要角色
   | 'characters-minor'      // 占位 (P7)
   | 'characters-npc'        // 占位 (P7)
   | 'characters-extra'      // 占位 (P7)
@@ -64,6 +65,9 @@ export type SidebarModule =
 
   // 物品栏（Phase 25.5.2-b）
   | 'inventory'
+
+  // 事实库（NS-4 时序事实账本）
+  | 'fact-library'
 
   // 故事进程年表（Phase 25.5.2-a）
   | 'story-timeline'
@@ -152,7 +156,8 @@ export const NAV_TREE: TreeSection[] = [
         label: '角色设计',
         icon: UsersRound,
         children: [
-          leaf('characters',         '主要角色', UserCircle),
+          leaf('characters',         '角色生成', UserCircle),
+          leaf('characters-main',    '主要角色', UserCircle),
           leaf('characters-minor',   '次要角色', User),
           leaf('characters-npc',     'NPC',      UsersRound),
           leaf('characters-extra',   '路人',     Footprints),
@@ -175,6 +180,7 @@ export const NAV_TREE: TreeSection[] = [
       leaf('locations',        '重要地点', MapPin),
       leaf('state-table',      '状态表',   ClipboardList),
       leaf('inventory',        '物品栏',   Package),
+      leaf('fact-library',     '事实库',   Database),
       leaf('story-timeline',   '故事年表', CalendarClock),
       leaf('scene-verify',     '场景考证', ScanSearch),
     ],
@@ -191,8 +197,8 @@ export const NAV_TREE: TreeSection[] = [
     label: '设置区',
     children: [
       leaf('version-history',  '版本历史', History),
-      leaf('import-doc',       '导入',     Upload),
-      leaf('export',           '导出',     Download),
+      leaf('import-doc',       '文档解析', Upload),
+      leaf('export',           '数据管理', Download),
       leaf('usage-stats',      '消耗统计', Coins),
       leaf('settings',         '设置',     Settings),
     ],

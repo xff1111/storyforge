@@ -1,8 +1,13 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Flame, Github, X, ChevronDown, ChevronRight } from 'lucide-react'
+import { Flame, Github, X, ChevronDown, ChevronRight, FolderOpen, Loader2 } from 'lucide-react'
 import { useProjectStore } from '../stores/project'
 import WelcomeGuide from '../components/guide/WelcomeGuide'
+import {
+  isFSASupported, pickFolder, ensureFolderPermission, readStoryforgeBackups,
+} from '../lib/storage/folder-backup'
+import { importProjectJSON } from '../lib/export/json-export'
+import { APP_VERSION } from '../lib/version'
 import {
   GENRE_OPTIONS, PROJECT_STATUS_LABELS,
   type ProjectStatus, type CreateProjectInput,
@@ -51,8 +56,33 @@ export default function HomePage() {
   const [form, setForm] = useState({ ...EMPTY_FORM })
   const [showGenreDropdown, setShowGenreDropdown] = useState(false)
   const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null)
+  const [restoring, setRestoring] = useState(false)
+  const [restoreMsg, setRestoreMsg] = useState<string | null>(null)
 
   useEffect(() => { loadProjects() }, [loadProjects])
+
+  // 从本地文件夹恢复：读回文件夹里所有 storyforge-*.json，各自导入成新项目（不覆盖现有）
+  const handleRestoreFromFolder = async () => {
+    if (!isFSASupported()) { setRestoreMsg('当前浏览器不支持本地文件夹，请用 Chrome / Edge') ; return }
+    const h = await pickFolder()
+    if (!h) return
+    setRestoring(true); setRestoreMsg('正在读取文件夹…')
+    try {
+      if (!(await ensureFolderPermission(h, false))) { setRestoreMsg('未获文件夹读取授权'); return }
+      const files = await readStoryforgeBackups(h)
+      if (files.length === 0) { setRestoreMsg('该文件夹里没找到 storyforge 备份文件'); return }
+      let ok = 0
+      for (const f of files) {
+        try { await importProjectJSON(f.data); ok++ } catch (e) { console.error('[restore] 导入失败', f.name, e) }
+      }
+      await loadProjects()
+      setRestoreMsg(`已从本地文件夹恢复 ${ok}/${files.length} 个项目`)
+    } catch (e) {
+      setRestoreMsg(`恢复失败：${(e as Error).message}`)
+    } finally {
+      setRestoring(false)
+    }
+  }
 
   const handleCreate = async () => {
     if (!form.name.trim()) return
@@ -104,7 +134,7 @@ export default function HomePage() {
   return (
     <div className="min-h-screen bg-bg-base" onClick={() => setDeleteConfirm(null)}>
       {/* 新手引导 */}
-      <WelcomeGuide onGoSettings={() => navigate('/workspace/settings')} />
+      <WelcomeGuide onGoSettings={() => navigate('/settings')} />
 
       {/* ── 顶栏 ──────────────────────────────────────── */}
       <header className="border-b border-border px-8 py-4 flex items-center sticky top-0 bg-bg-base/90 backdrop-blur-sm z-20">
@@ -126,6 +156,13 @@ export default function HomePage() {
               style={{ fontSize: 10, letterSpacing: 2, textTransform: 'uppercase', fontStyle: 'normal', fontFamily: 'var(--font-sans)' }}
             >
               故事熔炉
+            </span>
+            <span
+              className="ml-2 px-1.5 py-0.5 rounded text-text-muted bg-bg-hover/60"
+              style={{ fontSize: 10, fontFamily: 'var(--font-mono, monospace)' }}
+              title="当前版本号（与 GitHub Releases / 更新日志对照即可知是否最新）"
+            >
+              {APP_VERSION}
             </span>
           </div>
         </div>
@@ -166,13 +203,29 @@ export default function HomePage() {
                 : 'AI 辅助写作工具，从世界观到最终稿'
               }
             </p>
-            <button
-              onClick={() => setShowCreate(true)}
-              className="px-4 py-2 bg-accent text-white rounded-lg hover:bg-accent-hover transition-colors text-sm font-medium flex items-center gap-1.5"
-            >
-              + 新建项目
-            </button>
+            <div className="flex items-center gap-2">
+              {isFSASupported() && (
+                <button
+                  onClick={handleRestoreFromFolder}
+                  disabled={restoring}
+                  title="从你之前绑定的本地文件夹里读回备份，导入成项目（不覆盖现有）"
+                  className="px-3 py-2 border border-border text-text-secondary rounded-lg hover:bg-bg-hover hover:text-text-primary transition-colors text-sm flex items-center gap-1.5 disabled:opacity-50"
+                >
+                  {restoring ? <Loader2 className="w-4 h-4 animate-spin" /> : <FolderOpen className="w-4 h-4" />}
+                  从本地文件夹恢复
+                </button>
+              )}
+              <button
+                onClick={() => setShowCreate(true)}
+                className="px-4 py-2 bg-accent text-white rounded-lg hover:bg-accent-hover transition-colors text-sm font-medium flex items-center gap-1.5"
+              >
+                + 新建项目
+              </button>
+            </div>
           </div>
+          {restoreMsg && (
+            <p className="text-xs text-text-muted mt-2 text-right">{restoreMsg}</p>
+          )}
         </div>
 
         {/* ── 项目列表 ───────────────────────────────── */}

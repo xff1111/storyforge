@@ -11,7 +11,7 @@ export const ADOPTION_SCHEMAS: CollectionAdoptionSpec[] = [
     target: 'characters',
     identity: { kind: 'composite', fields: ['homeWorldGroupId', 'name'] },
     duplicatePolicy: 'merge',
-    required: ['name', 'role'],
+    required: ['name', 'roleWeight', 'moralAxis', 'orderAxis'],
     autoStamps: ['projectId', 'homeWorldGroupId', 'createdAt', 'updatedAt'],
   },
   {
@@ -76,6 +76,38 @@ export const ADOPTION_SCHEMAS: CollectionAdoptionSpec[] = [
     required: ['categoryId', 'name'],
     autoStamps: ['projectId', 'worldGroupId', 'createdAt', 'updatedAt'],
     fkChecks: [{ field: 'categoryId', target: 'codexCategories' }],
+  },
+  {
+    target: 'importantLocations',
+    identity: 'name',
+    duplicatePolicy: 'merge',
+    required: ['name'],
+    autoStamps: ['projectId', 'createdAt', 'updatedAt'],
+    fkChecks: [{ field: 'parentId', target: 'importantLocations' }],
+  },
+  {
+    target: 'itemLedger',
+    identity: { kind: 'composite', fields: ['chapterId', 'itemName', 'action', 'note'] },
+    duplicatePolicy: 'skip',
+    required: ['itemName', 'action', 'quantity'],
+    autoStamps: ['projectId', 'createdAt'],
+    fkChecks: [{ field: 'chapterId', target: 'chapters' }],
+  },
+  {
+    target: 'storyTimelineEvents',
+    identity: { kind: 'composite', fields: ['chapterId', 'title'] },
+    duplicatePolicy: 'update',
+    required: ['title', 'importance'],
+    autoStamps: ['projectId', 'createdAt'],
+    fkChecks: [{ field: 'chapterId', target: 'chapters' }],
+  },
+  {
+    target: 'stateCards',
+    identity: { kind: 'composite', fields: ['category', 'entityName'] },
+    duplicatePolicy: 'merge',
+    required: ['category', 'entityName', 'fields'],
+    autoStamps: ['projectId', 'createdAt', 'updatedAt'],
+    fkChecks: [{ field: 'lastChapterId', target: 'chapters' }],
   },
 ]
 

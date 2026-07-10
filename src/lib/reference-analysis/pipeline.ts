@@ -1,24 +1,17 @@
 /**
- * 参考作品深度分析流水线（Phase 20 — 八维分析）
+ * 参考作品·作品分析流水线（FB-5b — 13 维统一分析）
  *
- * 整合原 master-study/pipeline.ts 的核心逻辑，升级为 8 维度分析：
- *   1. narrativeStructure   叙事架构
- *   2. openingTechnique     开篇与黄金三章
- *   3. plotRhythm           情节结构与节奏
- *   4. characterCraft       人物塑造
- *   5. conflictEscalation   冲突与升级
- *   6. foreshadowing        伏笔与悬念
- *   7. proseAndDialogue     文笔与对话
- *   8. worldBuilding        世界观构建
+ * 维度见 ANALYSIS_DIMENSIONS（reference.ts）：13 个小说维度 + 题材自适应历史维度。
+ * 两档：
+ *   · 浅层（quick）—— 复用导入解析已出的写作技法，写一条「全书」row，便宜。
+ *   · 深层（deep） —— 逐块精读，每维含原文引用 + 全书总结，写 per-chunk rows + 断点续跑。
  *
- * 与 master-study/pipeline 的区别：
- *   · 写入 referenceChunkAnalysis 表（而非 masterChunkAnalysis）
- *   · 分析结果关联到 Reference 而非 MasterWork
- *   · 使用新的 8 维分析 prompt
- *   · 状态写回 Reference 的 analysisStatus / analysisProgress
+ * 数据走向：
+ *   · 写入 referenceChunkAnalysis 表，关联到 Reference。
+ *   · 状态写回 Reference 的 analysisStatus / analysisProgress。
  */
 import { db } from '../db/schema'
-import { chat } from '../ai/client'
+import { chat, type AICallMeta } from '../ai/client'
 import { useAIConfigStore } from '../../stores/ai-config'
 import { chunkDocument, quickHash, type ChunkPlan } from '../import/chunker'
 import { extractJSON } from '../ai/adapters/import-adapter'
@@ -412,7 +405,7 @@ ${depthGuide}
   const baseConfig = useAIConfigStore.getState().config
   const config: AIConfig = { ...baseConfig, maxTokens: args.maxTokens }
   if (!config.apiKey) throw new Error('未配置 AI API Key（请先到「系统设置 → AI 配置」填写）')
-  const output = await chatWithAbort(messages, config, args.signal)
+  const output = await chatWithAbort(messages, config, args.signal, { category: 'reference.analysis', projectId: args.ref.projectId })
   const obj = extractJSON(output) as RawAnalysis
   return obj || {}
 }
@@ -423,11 +416,12 @@ async function chatWithAbort(
   messages: ChatMessage[],
   config: AIConfig,
   signal?: AbortSignal,
+  meta?: AICallMeta,
 ): Promise<string> {
   if (signal?.aborted) {
     const e = new Error('aborted'); e.name = 'AbortError'; throw e
   }
-  return await chat(messages, config, undefined, signal)
+  return await chat(messages, config, meta, signal)
 }
 
 function buildRollingContext(prev: string, row: ReferenceChunkAnalysis): string {

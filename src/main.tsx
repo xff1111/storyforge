@@ -3,27 +3,46 @@ import ReactDOM from 'react-dom/client'
 import { BrowserRouter } from 'react-router-dom'
 import App from './App'
 import ErrorBoundary from './components/shared/ErrorBoundary'
+import { DialogProvider } from './components/shared/Dialog'
 import { ToastProvider } from './components/shared/Toast'
 import { usePromptStore } from './stores/prompt'
 import { useWorkflowStore } from './stores/workflow'
-import { ensureSchema, REQUIRED_TABLES_V26 } from './lib/db/ensure-schema'
+import { ensureSchema, REQUIRED_TABLES } from './lib/db/ensure-schema'
 import { validateRegistry } from './lib/registry/validate'
-import { migrateMasterDataToReferences } from './lib/reference-analysis/migrate-master-data'
+import { db } from './lib/db/schema'
+import { finalizeCharacterAxesMigrationSnapshots } from './lib/migrations/finalize-character-axes-snapshots'
+import { applyStoryForgeTheme, resolveStoryForgeTheme } from './lib/theme'
+import { registerStoryForgeServiceWorker } from './lib/pwa/register-service-worker'
 import './index.css'
 
 // 从 localStorage 恢复主题（兼容旧主题名迁移）
-let savedTheme = localStorage.getItem('storyforge-theme') || 'forge'
-const THEME_MIGRATE: Record<string, string> = {
-  work: 'forge', midnight: 'forge', ocean: 'forge', graphite: 'forge',
-  mist: 'paper', parchment: 'paper',
+applyStoryForgeTheme(resolveStoryForgeTheme(localStorage.getItem('storyforge-theme')))
+registerStoryForgeServiceWorker()
+
+/**
+ * FB-11 数据持久 · 启动期申请「持久化存储」。
+ * 不申请时浏览器把 IndexedDB 当 best-effort,可在磁盘压力/关闭清理/隐私插件下
+ * 直接驱逐整库 → 用户表现为"数据被重置"。persist() 在 Chrome 是静默授予(按使用度
+ * 启发式,不弹窗),被拒或不支持都不影响主流程,故 fire-and-forget。
+ */
+async function requestPersistentStorage() {
+  try {
+    if (navigator.storage?.persist) {
+      const already = await navigator.storage.persisted()
+      if (!already) {
+        const granted = await navigator.storage.persist()
+        console.info(`[bootstrap] persistent storage ${granted ? '已授予' : '未授予(浏览器启发式未满足,可稍后再试)'}`)
+      }
+    }
+  } catch (e) {
+    console.warn('[bootstrap] persist storage 申请失败(不影响运行):', e)
+  }
 }
-if (THEME_MIGRATE[savedTheme]) {
-  savedTheme = THEME_MIGRATE[savedTheme]
-  localStorage.setItem('storyforge-theme', savedTheme)
-}
-document.documentElement.setAttribute('data-theme', savedTheme)
 
 async function bootstrap() {
+  // 0. FB-11: 尽早申请持久化存储,降低 IndexedDB 被浏览器驱逐("重置")的概率。
+  void requestPersistentStorage()
+
   // 0. Phase 1.1b: 注册表完整性校验。开发环境 throw(立刻发现漏登记),生产环境只告警。
   try {
     validateRegistry({ throwOnError: import.meta.env.DEV })
@@ -33,7 +52,9 @@ async function bootstrap() {
 
   // 1. Schema 健康自检：开发环境可自动 reset，生产环境绝不自动删库。
   try {
-    await ensureSchema(REQUIRED_TABLES_V26, { allowReset: import.meta.env.DEV })
+    await ensureSchema(REQUIRED_TABLES, { allowReset: import.meta.env.DEV })
+    await db.open()
+    await finalizeCharacterAxesMigrationSnapshots()
   } catch (e) {
     console.error('[bootstrap] schema check failed:', e)
   }
@@ -52,19 +73,14 @@ async function bootstrap() {
     console.error('[bootstrap] workflow store init failed:', e)
   }
 
-  // 4. Phase 20：迁移作品学习数据到项目参考（一次性，幂等）
-  try {
-    await migrateMasterDataToReferences()
-  } catch (e) {
-    console.error('[bootstrap] master→ref migration failed:', e)
-  }
-
   ReactDOM.createRoot(document.getElementById('root')!).render(
     <React.StrictMode>
       <ErrorBoundary>
         <BrowserRouter basename="/storyforge">
           <ToastProvider>
-            <App />
+            <DialogProvider>
+              <App />
+            </DialogProvider>
           </ToastProvider>
         </BrowserRouter>
       </ErrorBoundary>

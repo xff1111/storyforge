@@ -5,6 +5,7 @@ import { useDetailedOutlineStore } from '../../stores/detailed-outline'
 import { useCharacterStore } from '../../stores/character'
 import { useForeshadowStore } from '../../stores/foreshadow'
 import { useAIStream } from '../../hooks/useAIStream'
+import { createAISessionKey } from '../../stores/ai-generation-session'
 import { buildDetailSceneGeneratePrompt, buildEnhancedDetailPrompt, parseEnhancedDetailSmart } from '../../lib/ai/adapters/detail-scene-adapter'
 import { useAIConfigStore } from '../../stores/ai-config'
 import { batchGenerateDetails, type BatchProgress } from '../../lib/ai/batch-detail-runner'
@@ -13,6 +14,7 @@ import { nanoid } from '../../lib/utils/id'
 import { adopt } from '../../lib/registry/adopt'
 import { assembleContext } from '../../lib/registry/assemble-context'
 import type { Project, DetailedOutline, DetailedScene, ScenePace, EmotionArc } from '../../lib/types'
+import { useToast } from '../shared/Toast'
 
 interface Props {
   project: Project
@@ -46,15 +48,15 @@ export function filterExistingIds(ids: number[], validIds: Set<number>): number[
 
 /** v3 §2.1 — 创作区.细纲（场景拆分 + AI） */
 export default function DetailedOutlinePanel({ project }: Props) {
+  const toast = useToast()
   const { nodes, loadAll: loadOutline } = useOutlineStore()
   const { detailedOutlines, loadAll: loadDetailed, getOrCreate, save } = useDetailedOutlineStore()
   const { characters, loadAll: loadCharacters } = useCharacterStore()
   const aiConfig = useAIConfigStore(s => s.config)
   const { foreshadows, loadAll: loadForeshadows } = useForeshadowStore()
-  const ai = useAIStream()
-  const enhanceAI = useAIStream()
-
   const [selectedNodeId, setSelectedNodeId] = useState<number | null>(null)
+  const ai = useAIStream(createAISessionKey(project.id!, 'detail.scene', selectedNodeId ?? 'unselected'))
+  const enhanceAI = useAIStream(createAISessionKey(project.id!, 'detail.enhance', selectedNodeId ?? 'unselected'))
 
   useEffect(() => {
     loadOutline(project.id!)
@@ -170,8 +172,8 @@ export default function DetailedOutlinePanel({ project }: Props) {
     const { worldContext: worldCtx } = await buildDetailContext(currentChapter.id!)
 
     const charCtx = characters
-      .filter(c => c.role === 'protagonist' || c.role === 'supporting')
-      .map(c => `[ID:${c.id}] ${c.name}（${c.role}）`)
+      .filter(c => c.roleWeight === 'main')
+      .map(c => `[ID:${c.id}] ${c.name}（${c.orderAxis}/${c.moralAxis}）`)
       .join('\n')
 
     const foreshadowCtx = foreshadows
@@ -185,13 +187,13 @@ export default function DetailedOutlinePanel({ project }: Props) {
       prevSummary, nextSummary,
       worldCtx, charCtx, foreshadowCtx,
     )
-    enhanceAI.start(messages)
+    enhanceAI.start(messages, undefined, { category: 'detail.enhance', projectId: project.id! })
   }
 
   const handleAcceptEnhanced = async (text: string) => {
     const parsed = await parseEnhancedDetailSmart(text, aiConfig)
     if (!parsed) {
-      alert('解析增强细纲失败，请重试')
+      toast.error('解析增强细纲失败，请重试')
       return
     }
     if (!currentChapter?.id) return
@@ -262,8 +264,8 @@ export default function DetailedOutlinePanel({ project }: Props) {
     })
     const worldCtx = baseCtx.text
     const charCtx = characters
-      .filter(c => c.role === 'protagonist' || c.role === 'supporting')
-      .map(c => `[ID:${c.id}] ${c.name}（${c.role}）`)
+      .filter(c => c.roleWeight === 'main')
+      .map(c => `[ID:${c.id}] ${c.name}（${c.orderAxis}/${c.moralAxis}）`)
       .join('\n')
     const foreshadowCtx = foreshadows
       .filter(f => f.status !== 'resolved')

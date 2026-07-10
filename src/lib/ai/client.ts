@@ -3,6 +3,7 @@ import { AIError } from '../types'
 import { createLog, updateLog, type TokenUsage } from './logger'
 import { recordUsage } from './usage-log'
 import { trimMessagesToFit } from './context-budget'
+import { buildOpenAIEndpoint } from './openai-endpoint'
 
 /** 调用元信息（用于消耗统计分类） */
 export interface AICallMeta {
@@ -16,13 +17,15 @@ export interface StreamResult {
   usage?: TokenUsage
 }
 
+/** 可变容器，chat 写入非流式调用返回的真实 token 用量。 */
+export interface ChatResult {
+  usage?: TokenUsage
+}
+
 /**
  * 根据 provider 构造请求 URL 和 headers
  */
 function buildRequest(config: AIConfig, messages: ChatMessage[], stream: boolean) {
-  // 标准化 baseUrl：去除尾部斜杠
-  const baseUrl = config.baseUrl.replace(/\/+$/, '')
-
   // 基础请求体：所有 provider 都需要的字段
   const body: Record<string, unknown> = {
     model: config.model,
@@ -33,7 +36,7 @@ function buildRequest(config: AIConfig, messages: ChatMessage[], stream: boolean
   // 流式请求时要求返回 token 用量
   // stream_options 仅 OpenAI / DeepSeek / Qwen 等兼容 provider 支持
   // 智谱 GLM / 文心 / Poe / Gemini 等不支持，传了会报参数错误
-  const NO_STREAM_OPTIONS: Set<string> = new Set(['glm', 'wenxin', 'poe', 'gemini', 'ollama'])
+  const NO_STREAM_OPTIONS: Set<string> = new Set(['glm', 'wenxin', 'poe', 'gemini', 'ollama', 'longcat'])
   if (stream && !NO_STREAM_OPTIONS.has(config.provider)) {
     body.stream_options = { include_usage: true }
   }
@@ -58,6 +61,12 @@ function buildRequest(config: AIConfig, messages: ChatMessage[], stream: boolean
       body.temperature = Math.min(Math.max(config.temperature, 0.01), 1.0)
     }
     if (config.maxTokens && config.maxTokens > 0) body.max_tokens = config.maxTokens
+  } else if (config.provider === 'longcat') {
+    // LongCat OpenAI 兼容端点：temperature 范围 0~1，且不声明 stream_options。
+    if (config.temperature !== undefined) {
+      body.temperature = Math.min(Math.max(config.temperature, 0), 1.0)
+    }
+    if (config.maxTokens && config.maxTokens > 0) body.max_tokens = config.maxTokens
   } else {
     if (config.temperature !== undefined) body.temperature = config.temperature
     // maxTokens > 0 才传，0 = 不限制（由模型自身决定）
@@ -65,7 +74,7 @@ function buildRequest(config: AIConfig, messages: ChatMessage[], stream: boolean
   }
 
   return {
-    url: `${baseUrl}/chat/completions`,
+    url: buildOpenAIEndpoint(config.baseUrl, 'chat/completions'),
     headers: {
       'Content-Type': 'application/json',
       'Authorization': `Bearer ${config.apiKey}`,
@@ -85,9 +94,12 @@ export async function* streamChat(
   result?: StreamResult,
   meta?: AICallMeta,
 ): AsyncGenerator<string> {
-  const trimmed = trimMessagesToFit(messages, config.provider, config.model, config.maxTokens)
+  const trimmed = trimMessagesToFit(messages, config.provider, config.model, config.maxTokens, config.contextWindow)
   if (trimmed.trimmed) {
     console.warn(`[AI] request messages trimmed to fit context window: ${trimmed.totalInputTokens}/${trimmed.inputBudget} tokens`)
+  }
+  if (!trimmed.protectedEnvelopePreserved) {
+    throw new Error('当前模型上下文窗口无法容纳最低连续性保护块；请降低输出长度或改用更大上下文模型。')
   }
   const req = buildRequest(config, trimmed.messages, true)
 
@@ -197,10 +209,14 @@ export async function chat(
   config: AIConfig,
   meta?: AICallMeta,
   signal?: AbortSignal,
+  result?: ChatResult,
 ): Promise<string> {
-  const trimmed = trimMessagesToFit(messages, config.provider, config.model, config.maxTokens)
+  const trimmed = trimMessagesToFit(messages, config.provider, config.model, config.maxTokens, config.contextWindow)
   if (trimmed.trimmed) {
     console.warn(`[AI] request messages trimmed to fit context window: ${trimmed.totalInputTokens}/${trimmed.inputBudget} tokens`)
+  }
+  if (!trimmed.protectedEnvelopePreserved) {
+    throw new Error('当前模型上下文窗口无法容纳最低连续性保护块；请降低输出长度或改用更大上下文模型。')
   }
   const req = buildRequest(config, trimmed.messages, false)
 
@@ -218,13 +234,19 @@ export async function chat(
 
   const json = await response.json()
   if (json.usage) {
+    const usage = {
+      inputTokens: json.usage.prompt_tokens ?? 0,
+      outputTokens: json.usage.completion_tokens ?? 0,
+      totalTokens: json.usage.total_tokens ?? 0,
+    }
+    if (result) result.usage = usage
     void recordUsage({
       projectId: meta?.projectId ?? null,
       timestamp: Date.now(),
       category: meta?.category ?? '',
       model: config.model,
-      inputTokens: json.usage.prompt_tokens ?? 0,
-      outputTokens: json.usage.completion_tokens ?? 0,
+      inputTokens: usage.inputTokens,
+      outputTokens: usage.outputTokens,
     })
   }
   return json.choices?.[0]?.message?.content || ''
